@@ -7,9 +7,54 @@
 #include <vtkRenderer.h>
 #include <vtkInteractorStyleTrackballCamera.h>
 #include <vtkeigen/eigen/Dense>
+#include <vtkPolyData.h>
+#include <vtkPolyDataMapper.h>
+#include <vtkActor.h>
+#include <vtkPolyDataReader.h>
+#include <vtkPoints.h>
+#include <vtkOpenGLSphereMapper.h>
+#include <vtkProperty.h>
+#include <vtkTriangle.h>
+#include <vtkCellArray.h>
 
 #include <fast_marching.h>
 
+template <typename DerivedV, typename DerivedF>
+vtkSmartPointer<vtkPolyData> MakePolyData(	Eigen::PlainObjectBase<DerivedV>& V, Eigen::PlainObjectBase<DerivedF>& F){	
+	vtkNew<vtkPoints> points;
+	for(int vid=0 ; vid < V.rows() ; vid++){
+		points->InsertNextPoint(V.coeff(vid, 0), V.coeff(vid, 1), V.coeff(vid, 2));
+	}
+
+	vtkNew<vtkCellArray> triangles;
+	for(int fid=0 ; fid < F.rows() ; fid++){
+		vtkNew<vtkTriangle> triangle;
+		triangle->GetPointIds()->SetId(0, F.coeff(fid, 0) );		
+		triangle->GetPointIds()->SetId(1, F.coeff(fid, 1) );		
+		triangle->GetPointIds()->SetId(2, F.coeff(fid, 2) );
+
+		triangles->InsertNextCell(triangle);
+	}
+
+	vtkNew<vtkPolyData> polydata;
+	polydata->SetPoints(points);
+	polydata->SetPolys(triangles);
+
+	return polydata;
+}
+
+
+vtkSmartPointer<vtkActor> MakeActor(vtkSmartPointer<vtkPolyData> polydata){
+
+	vtkNew<vtkPolyDataMapper> mapper;
+	mapper->SetInputData(polydata);
+
+	vtkNew<vtkActor> actor;
+	actor->SetMapper(mapper);
+
+
+	return actor;
+}
 
 
 template <typename DerivedV, typename DerivedF>
@@ -68,20 +113,32 @@ int main(int argc, char *argv[]){
     fmdata.option.iter_max = 1000;
 
 
+	std::cout << "PrepareFastMarching..." << std::endl;
+	fmdata.PrepareFastMarching(V, F);
+
+
+	
+	// Make Polydata and actor for rendering
+	vtkSmartPointer<vtkPolyData> polydata = MakePolyData(V, F);
+	vtkSmartPointer<vtkActor> actor = MakeActor(polydata);
+
+
     
-    // vtkNew<vtkRenderWindowInteractor> iren;
-    // iren->SetInteractorStyle(vtkSmartPointer<vtkInteractorStyleTrackballCamera>::New());
-    // vtkNew<vtkRenderWindow> renWin;
-    // renWin->SetSize(1000, 1000);
-    // iren->SetRenderWindow(renWin);
-    // vtkNew<vtkRenderer> ren;
-    // renWin->AddRenderer(ren);
+    vtkNew<vtkRenderWindowInteractor> iren;
+    iren->SetInteractorStyle(vtkSmartPointer<vtkInteractorStyleTrackballCamera>::New());
+    vtkNew<vtkRenderWindow> renWin;
+    renWin->SetSize(1000, 1000);
+    iren->SetRenderWindow(renWin);
+    vtkNew<vtkRenderer> ren;
+    renWin->AddRenderer(ren);
 
-    // std::cout << "Hell World" << std::endl;
+	actor->GetProperty()->SetColor(1, 0, 0);
 
-    // renWin->Render();
-    // iren->Initialize();
-    // iren->Start();
+	ren->AddActor(actor);
+
+	ren->ResetCamera();
+    renWin->Render();
+    iren->Start();
 
     // std::cout << "??" << std::endl;
     return 0;
