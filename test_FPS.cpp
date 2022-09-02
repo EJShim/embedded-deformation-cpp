@@ -65,6 +65,8 @@ bool saveFSP_Result(const char *file, FastMarchingData &fmdata) {
 	oFile.close();
 	return true;
 }
+
+
 int test_FPS(int argc, char *argv[]) {
 	if (argc < 2) {
 		std::cout << "lack of mesh file and result file!\n";

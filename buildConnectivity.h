@@ -1,6 +1,6 @@
-#ifndef BUILD_CONNECTIVITY_H_
-#define BUILD_CONNECTIVITY_H_
-#include <Eigen/Dense>
+#pragma once
+
+#include <vtkeigen/eigen/Dense>
 #include <vector>
 using namespace std;
 
@@ -117,5 +117,3 @@ bool buildConnectivity(const Eigen::PlainObjectBase<DerivedF>& F,
 	std::cout << "has build the triangle_triangle connectivity!\n";
 	return true;
 }
-
-#endif

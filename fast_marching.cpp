@@ -1,7 +1,7 @@
 #include "buildConnectivity.h"
 #include <iostream>
 
-#include <Eigen/Geometry>
+#include <vtkeigen/eigen/Geometry>
 #include <cassert>
 #include "fast_marching.h"
 

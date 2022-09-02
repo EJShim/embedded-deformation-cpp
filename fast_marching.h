@@ -1,8 +1,8 @@
 #ifndef DHW_FAST_MARCHING_H
 #define DHW_FAST_MARCHING_H
 
-#include <Eigen/Dense>
-#include <Eigen/Sparse>
+#include <vtkeigen/eigen/Dense>
+#include <vtkeigen/eigen/Sparse>
 #include <vector>
 #include <memory>
 using namespace std;
