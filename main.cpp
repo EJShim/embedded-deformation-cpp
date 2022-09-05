@@ -16,6 +16,8 @@
 #include <vtkProperty.h>
 #include <vtkTriangle.h>
 #include <vtkCellArray.h>
+#include <random>
+
 
 #include <fast_marching.h>
 
@@ -94,36 +96,21 @@ inline int readOFF(
 
 
 int main(int argc, char *argv[]){
-    Eigen::MatrixXd V;
-    Eigen::MatrixXi F;
 
     if (argc < 2) {
 		std::cout << "lack of mesh file and result file!\n";
 		std::cout << "run this program in format: test_FPS meshfile resultfile \n";
 		return 1;
 	}
+
+	Eigen::MatrixXd V;
+    Eigen::MatrixXi F;
 	if (readOFF(argv[1], V, F) != 0) {
 		std::cout << "read the file " << argv[1] << " failed";
 		return 2;
 	}
 
-    std::vector<int> start_points;
-
-    FastMarchingData fmdata;
-    fmdata.option.iter_max = 1000;
-
-
-	std::cout << "PrepareFastMarching..." << std::endl;
-	fmdata.PrepareFastMarching(V, F);
-
-
-	
-	// Make Polydata and actor for rendering
-	vtkSmartPointer<vtkPolyData> polydata = MakePolyData(V, F);
-	vtkSmartPointer<vtkActor> actor = MakeActor(polydata);
-
-
-    
+	// Initialize Renderer
     vtkNew<vtkRenderWindowInteractor> iren;
     iren->SetInteractorStyle(vtkSmartPointer<vtkInteractorStyleTrackballCamera>::New());
     vtkNew<vtkRenderWindow> renWin;
@@ -132,9 +119,36 @@ int main(int argc, char *argv[]){
     vtkNew<vtkRenderer> ren;
     renWin->AddRenderer(ren);
 
-	actor->GetProperty()->SetColor(1, 0, 0);
+    std::vector<int> start_points;
 
+    FastMarchingData fmdata;
+    fmdata.option.iter_max = 1000;
+	std::cout << "PrepareFastMarching..." << std::endl;
+	fmdata.PrepareFastMarching(V, F);
+
+	// Make Polydata and actor for rendering
+	vtkSmartPointer<vtkPolyData> polydata = MakePolyData(V, F);
+	vtkSmartPointer<vtkActor> actor = MakeActor(polydata);
+
+	actor->GetProperty()->SetColor(1, 0, 0);
 	ren->AddActor(actor);
+
+
+	// Run Fast Decimation
+	// std::random_device rd;
+	// std::mt19937 gen(rd());
+	// std::uniform_int_distribution<> dis(0, V.rows() - 1);
+	// int n = 1;
+	// for (int i = 0; i < n; ++i)
+	// 	start_points.push_back(dis(gen));
+	// start_points[0] = 18842;
+	start_points.push_back(18842);
+
+	std::cout << "start FarthestPointSampling...\n";
+	fmdata.FarthestPointSampling(V, F, start_points, 20);
+	std::cout << "Done" << std::endl;
+	std::cout << V << std::endl;
+
 
 	ren->ResetCamera();
     renWin->Render();

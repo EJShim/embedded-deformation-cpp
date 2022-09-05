@@ -95,6 +95,8 @@ int test_FPS(int argc, char *argv[]) {
 	//	fmdata.PerformFastMarching(V, F, start_points);
 	std::cout << "start FarthestPointSampling...\n";
 	fmdata.FarthestPointSampling(V, F, start_points, 20);
+	std::cout << V << std::endl;
+
 
 	if (argc >= 3) {
 		std::cout << "save to file "<< argv[2]<< "....\n";

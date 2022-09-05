@@ -2,8 +2,8 @@
 #ifndef DHW_DEFORMATION_GRAPH_H
 #define DHW_DEFORMATION_GRAPH_H
 
-#include <Eigen/Dense>
-#include <Eigen/Sparse>
+#include <vtkeigen/eigen/Dense>
+#include <vtkeigen/eigen/Sparse>
 #include <vector>
 #include <fstream>
 #include <algorithm>

@@ -491,18 +491,19 @@ bool FastMarchingData::PrepareFastMarching(const Eigen::MatrixXd &V, const Eigen
 	return true;
 }
 
-bool FastMarchingData::PerformFastMarching(
-	const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
-	const vector<int> &start_points	)
+bool FastMarchingData::PerformFastMarching(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,const vector<int> &start_points	)
 {
 	nbr_iter = 0;
 	for (int i = 0; i < V.rows(); i++) {
 		vertices[i].state = VertexState::kFar;
 	}
 
+	
+
 	//set start points	
 	VertexPtrVector active_Vertices;
 	for (auto i : start_points) {
+		std::cout << i << std::endl;
 		vertices[i].state = VertexState::kAlive;
 		vertices[i].front = i;
 		vertices[i].distance = 0;
@@ -510,6 +511,10 @@ bool FastMarchingData::PerformFastMarching(
 
 		seed_points.push_back(i);
 	}
+
+	
+	std::cout << "heap" << std::endl;
+
 
 	std::make_heap(active_Vertices.begin(), active_Vertices.end(),
 		[](FastMarchingVertex* vetex1, FastMarchingVertex* vetex2)->bool 
@@ -632,10 +637,10 @@ std::pair<int, FM_Float> FastMarchingData::FarthestPointSamplingStep(
 	return std::make_pair(max_ind, mad_dist); 
 }
 
-std::pair<int, FM_Float> FastMarchingData::FarthestPointSampling(
-	const Eigen::MatrixXd &V, const Eigen::MatrixXi &F,
-	const vector<int> &start_points, int num) {
+std::pair<int, FM_Float> FastMarchingData::FarthestPointSampling(const Eigen::MatrixXd &V, const Eigen::MatrixXi &F, const vector<int> &start_points, int num) {
+	std::cout << "Perform Fast Matching"  <<  std::endl;
 	PerformFastMarching(V, F, start_points);
+	std::cout << "Fast Marching Donee" << std::endl;
 	
 	std::pair<int, FM_Float> p;
 	for (int i = 0; i < num; i++){
