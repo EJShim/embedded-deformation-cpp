@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <vtkeigen/eigen/Dense>
 #include <vector>
 using namespace std;
