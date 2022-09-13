@@ -17,9 +17,8 @@
 #include <vtkTriangle.h>
 #include <vtkCellArray.h>
 #include <random>
-
-
-#include <fast_marching.h>
+#include <vtkPLYReader.h>
+#include <vtkQuadricDecimation.h>
 
 template <typename DerivedV, typename DerivedF>
 vtkSmartPointer<vtkPolyData> MakePolyData(	Eigen::PlainObjectBase<DerivedV>& V, Eigen::PlainObjectBase<DerivedF>& F){	
@@ -97,18 +96,18 @@ inline int readOFF(
 
 int main(int argc, char *argv[]){
 
-    if (argc < 2) {
-		std::cout << "lack of mesh file and result file!\n";
-		std::cout << "run this program in format: test_FPS meshfile resultfile \n";
-		return 1;
-	}
+    // if (argc < 2) {
+	// 	std::cout << "lack of mesh file and result file!\n";
+	// 	std::cout << "run this program in format: test_FPS meshfile resultfile \n";
+	// 	return 1;
+	// }
 
-	Eigen::MatrixXd V;
-    Eigen::MatrixXi F;
-	if (readOFF(argv[1], V, F) != 0) {
-		std::cout << "read the file " << argv[1] << " failed";
-		return 2;
-	}
+	// Eigen::MatrixXd V;
+    // Eigen::MatrixXi F;
+	// if (readOFF(argv[1], V, F) != 0) {
+	// 	std::cout << "read the file " << argv[1] << " failed";
+	// 	return 2;
+	// }
 
 	// Initialize Renderer
     vtkNew<vtkRenderWindowInteractor> iren;
@@ -119,36 +118,35 @@ int main(int argc, char *argv[]){
     vtkNew<vtkRenderer> ren;
     renWin->AddRenderer(ren);
 
-    std::vector<int> start_points;
-
-    FastMarchingData fmdata;
-    fmdata.option.iter_max = 1000;
-	std::cout << "PrepareFastMarching..." << std::endl;
-	fmdata.PrepareFastMarching(V, F);
-
 	// Make Polydata and actor for rendering
-	vtkSmartPointer<vtkPolyData> polydata = MakePolyData(V, F);
-	vtkSmartPointer<vtkActor> actor = MakeActor(polydata);
+	vtkNew<vtkPLYReader> reader;
+	reader->SetFileName("../sample_faust.ply");
+	reader->Update();
 
+	// vtkSmartPointer<vtkPolyData> polydata = MakePolyData(V, F);
+	vtkSmartPointer<vtkPolyData> polydata = reader->GetOutput();
+	vtkSmartPointer<vtkActor> actor = MakeActor(polydata);
 	actor->GetProperty()->SetColor(1, 0, 0);
 	ren->AddActor(actor);
 
 
-	// Run Fast Decimation
-	// std::random_device rd;
-	// std::mt19937 gen(rd());
-	// std::uniform_int_distribution<> dis(0, V.rows() - 1);
-	// int n = 1;
-	// for (int i = 0; i < n; ++i)
-	// 	start_points.push_back(dis(gen));
-	// start_points[0] = 18842;
-	start_points.push_back(18842);
+	//TODO : Decimate Plydata
+	vtkNew<vtkQuadricDecimation> decimate;
+	decimate->SetInputData(polydata);
+	// decimate->AttributeErrorMetricOn();
+	decimate->SetTargetReduction(.75);
+	// decimate->VolumePreservationOn();
+	decimate->Update();
 
-	std::cout << "start FarthestPointSampling...\n";
-	fmdata.FarthestPointSampling(V, F, start_points, 20);
-	std::cout << "Done" << std::endl;
-	std::cout << V << std::endl;
 
+	vtkSmartPointer<vtkPolyData> polydata_downsampled = decimate->GetOutput();
+	vtkSmartPointer<vtkActor> actor_downsampled = MakeActor(polydata_downsampled);
+	actor_downsampled->SetPosition(1, 0, 0);
+	actor_downsampled->GetProperty()->SetRepresentationToWireframe();
+	ren->AddActor(actor_downsampled);
+	
+
+	
 
 	ren->ResetCamera();
     renWin->Render();

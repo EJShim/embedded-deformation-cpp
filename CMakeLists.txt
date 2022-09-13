@@ -9,8 +9,6 @@ find_package(VTK REQUIRED)
 add_executable(
   edl 
   main.cpp
-  fast_marching.cpp
-  deformation_graph.cpp
   )
 
 target_link_libraries(edl PRIVATE ${VTK_LIBRARIES})
