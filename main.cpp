@@ -25,7 +25,8 @@
 
 
 //TODO : optimize this
-vtkSmartPointer<vtkPolyData> MakePolyData(	Eigen::MatrixXd &V, Eigen::MatrixXi &F){	
+template <typename DerivedV, typename DerivedF>
+vtkSmartPointer<vtkPolyData> MakePolyData(	Eigen::PlainObjectBase<DerivedV>& V, Eigen::PlainObjectBase<DerivedF>& F){
 	vtkNew<vtkDoubleArray> pointsArray;
 	pointsArray->SetArray(V.transpose().data(), V.size(), 1);	
 	pointsArray->SetNumberOfComponents(3);	
@@ -108,10 +109,6 @@ int main(int argc, char *argv[]){
 	Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic,  Eigen::RowMajor> V, U;
 	Eigen::MatrixXi F;
 	igl::read_triangle_mesh("../resources/decimated-knight.off", V, F);
-
-	std::cout << V.rows() << ", " << V.cols() << std::endl;
-	V = V.transpose();
-	std::cout << V.rows() << "," << V.cols() << std::endl;
 
 
 	vtkSmartPointer<vtkPolyData> polydata = MakePolyData(V, F);	
