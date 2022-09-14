@@ -6,69 +6,25 @@
 #include <vtkRenderWindow.h>
 #include <vtkRenderer.h>
 #include <vtkInteractorStyleTrackballCamera.h>
-#include <Eigen/Dense>
 #include <vtkPolyData.h>
-#include <vtkPolyDataMapper.h>
 #include <vtkActor.h>
-#include <vtkPolyDataReader.h>
-#include <vtkOpenGLSphereMapper.h>
 #include <vtkProperty.h>
-#include <vtkTriangle.h>
-#include <vtkCellArray.h>
-#include <random>
 #include <vtkOBJReader.h>
-#include <vtkPoints.h>
-#include <vtkDoubleArray.h>
-#include <vtkDataArray.h>
-
 #include <igl/read_triangle_mesh.h>
-
-
-//TODO : optimize this
-template <typename DerivedV, typename DerivedF>
-vtkSmartPointer<vtkPolyData> MakePolyData(	Eigen::PlainObjectBase<DerivedV>& V, Eigen::PlainObjectBase<DerivedF>& F){
-	vtkNew<vtkDoubleArray> pointsArray;
-	pointsArray->SetArray(V.data(), V.size(), 0);	
-	pointsArray->SetNumberOfComponents(3);	
-	vtkNew<vtkPoints> points;
-	points->SetData(pointsArray);			
-
-	vtkNew<vtkCellArray> triangles;
-	for(int fid=0 ; fid < F.rows() ; fid++){
-		vtkNew<vtkTriangle> triangle;
-		triangle->GetPointIds()->SetId(0, F.coeff(fid, 0) );		
-		triangle->GetPointIds()->SetId(1, F.coeff(fid, 1) );		
-		triangle->GetPointIds()->SetId(2, F.coeff(fid, 2) );
-
-		triangles->InsertNextCell(triangle);
-	}
-
-	vtkNew<vtkPolyData> polydata;
-	polydata->SetPoints(points);
-	polydata->SetPolys(triangles);
-
-	return polydata;
-}
-
-
-vtkSmartPointer<vtkActor> MakeActor(vtkSmartPointer<vtkPolyData> polydata){
-
-	vtkNew<vtkPolyDataMapper> mapper;
-	mapper->SetInputData(polydata);
-
-	vtkNew<vtkActor> actor;
-	actor->SetMapper(mapper);
-
-
-	return actor;
-}
-
-
-
-
+#include "utils.hpp"
+#include <Eigen/Dense>
 
 
 int main(int argc, char *argv[]){
+
+	std::string input_file;
+	if(argc == 1){		
+		input_file = "../resources/decimated-knight.off";
+	}else{
+		input_file = argv[1];
+	}
+	std::cout << input_file << std::endl;
+
     
 	// Initialize Renderer
     vtkNew<vtkRenderWindowInteractor> iren;
@@ -83,28 +39,19 @@ int main(int argc, char *argv[]){
 	ren->SetBackground2(.9, .9, .9);
 
 
-	// Make Polydata and actor for rendering
-	vtkNew<vtkOBJReader> reader;
-	reader->SetFileName("../resources/sample_faust.obj");
-	reader->Update();
-
-
-	//read igl off file read test
-	Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic,  Eigen::RowMajor> V, U;
-	Eigen::MatrixXi F;
-	igl::read_triangle_mesh("../resources/decimated-knight.off", V, F);
-
-
-	vtkSmartPointer<vtkPolyData> polydata = MakePolyData(V, F);		
-
-
+	vtkSmartPointer<vtkPolyData> polydata = ReadPolyData(input_file);
 	vtkSmartPointer<vtkActor> actor = MakeActor(polydata);
 	actor->GetProperty()->SetColor(1, 0, 0);
 	actor->GetProperty()->SetEdgeVisibility(true);
 	ren->AddActor(actor);
-	
-	
 
+	
+	// check if changing V affects polydata modification
+	// Assign V with new Eigen::matrix
+	Eigen::Map<Eigen::Matrix<double, -1, -1, Eigen::RowMajor>> U((double*)polydata->GetPoints()->GetData()->GetVoidPointer(0), polydata->GetNumberOfPoints(), 3);	
+	U(0,0) = 10;
+
+	
 	ren->ResetCamera();
     renWin->Render();
     iren->Start();
