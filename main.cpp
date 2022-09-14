@@ -6,7 +6,7 @@
 #include <vtkRenderWindow.h>
 #include <vtkRenderer.h>
 #include <vtkInteractorStyleTrackballCamera.h>
-#include <vtkeigen/eigen/Dense>
+#include <Eigen/Dense>
 #include <vtkPolyData.h>
 #include <vtkPolyDataMapper.h>
 #include <vtkActor.h>
@@ -17,8 +17,10 @@
 #include <vtkTriangle.h>
 #include <vtkCellArray.h>
 #include <random>
-#include <vtkPLYReader.h>
+#include <vtkOBJReader.h>
 #include <vtkQuadricDecimation.h>
+#include <igl/read_triangle_mesh.h>
+
 
 template <typename DerivedV, typename DerivedF>
 vtkSmartPointer<vtkPolyData> MakePolyData(	Eigen::PlainObjectBase<DerivedV>& V, Eigen::PlainObjectBase<DerivedF>& F){	
@@ -59,10 +61,7 @@ vtkSmartPointer<vtkActor> MakeActor(vtkSmartPointer<vtkPolyData> polydata){
 
 
 template <typename DerivedV, typename DerivedF>
-inline int readOFF(
-	const char * str,
-	Eigen::PlainObjectBase<DerivedV>& V,
-	Eigen::PlainObjectBase<DerivedF>& F)
+inline int readOFF(const char * str,Eigen::PlainObjectBase<DerivedV>& V,Eigen::PlainObjectBase<DerivedF>& F)
 {
 	std::ifstream iFile(str);
 	if (!iFile) {
@@ -117,33 +116,41 @@ int main(int argc, char *argv[]){
     iren->SetRenderWindow(renWin);
     vtkNew<vtkRenderer> ren;
     renWin->AddRenderer(ren);
+	ren->SetGradientBackground(true);
+	ren->SetBackground(.2, .2, .2);
+	ren->SetBackground2(.9, .9, .9);
+
 
 	// Make Polydata and actor for rendering
-	vtkNew<vtkPLYReader> reader;
-	reader->SetFileName("../sample_faust.ply");
+	vtkNew<vtkOBJReader> reader;
+	reader->SetFileName("../resources/sample_faust.obj");
 	reader->Update();
 
 	// vtkSmartPointer<vtkPolyData> polydata = MakePolyData(V, F);
 	vtkSmartPointer<vtkPolyData> polydata = reader->GetOutput();
 	vtkSmartPointer<vtkActor> actor = MakeActor(polydata);
 	actor->GetProperty()->SetColor(1, 0, 0);
+	actor->GetProperty()->SetEdgeVisibility(true);
 	ren->AddActor(actor);
+	
 
 
-	//TODO : Decimate Plydata
-	vtkNew<vtkQuadricDecimation> decimate;
-	decimate->SetInputData(polydata);
-	// decimate->AttributeErrorMetricOn();
-	decimate->SetTargetReduction(.75);
-	// decimate->VolumePreservationOn();
-	decimate->Update();
+	// //TODO : Decimate Plydata
+	// vtkNew<vtkQuadricDecimation> decimate;
+	// decimate->SetInputData(polydata);
+	// // decimate->AttributeErrorMetricOn();
+	// decimate->SetTargetReduction(.75);
+	// // decimate->VolumePreservationOn();
+	// decimate->Update();
 
 
-	vtkSmartPointer<vtkPolyData> polydata_downsampled = decimate->GetOutput();
-	vtkSmartPointer<vtkActor> actor_downsampled = MakeActor(polydata_downsampled);
-	actor_downsampled->SetPosition(1, 0, 0);
-	actor_downsampled->GetProperty()->SetRepresentationToWireframe();
-	ren->AddActor(actor_downsampled);
+	// vtkSmartPointer<vtkPolyData> polydata_downsampled = decimate->GetOutput();
+	// vtkSmartPointer<vtkActor> actor_downsampled = MakeActor(polydata_downsampled);
+	// actor_downsampled->SetPosition(1, 0, 0);
+	// // actor_downsampled->GetProperty()->SetRepresentationToWireframe();
+	// actor_downsampled->GetProperty()->SetColor(1, 0, 1);
+	// actor_downsampled->GetProperty()->SetEdgeVisibility(true);
+	// ren->AddActor(actor_downsampled);
 	
 
 	
