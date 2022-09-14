@@ -6,27 +6,32 @@
 #include <vtkRenderWindow.h>
 #include <vtkRenderer.h>
 #include <vtkInteractorStyleTrackballCamera.h>
-#include <vtkeigen/eigen/Dense>
+#include <Eigen/Dense>
 #include <vtkPolyData.h>
 #include <vtkPolyDataMapper.h>
 #include <vtkActor.h>
 #include <vtkPolyDataReader.h>
-#include <vtkPoints.h>
 #include <vtkOpenGLSphereMapper.h>
 #include <vtkProperty.h>
 #include <vtkTriangle.h>
 #include <vtkCellArray.h>
 #include <random>
+#include <vtkOBJReader.h>
+#include <vtkPoints.h>
+#include <vtkDoubleArray.h>
+#include <vtkDataArray.h>
+
+#include <igl/read_triangle_mesh.h>
 
 
-#include <fast_marching.h>
-
+//TODO : optimize this
 template <typename DerivedV, typename DerivedF>
-vtkSmartPointer<vtkPolyData> MakePolyData(	Eigen::PlainObjectBase<DerivedV>& V, Eigen::PlainObjectBase<DerivedF>& F){	
+vtkSmartPointer<vtkPolyData> MakePolyData(	Eigen::PlainObjectBase<DerivedV>& V, Eigen::PlainObjectBase<DerivedF>& F){
+	vtkNew<vtkDoubleArray> pointsArray;
+	pointsArray->SetArray(V.data(), V.size(), 0);	
+	pointsArray->SetNumberOfComponents(3);	
 	vtkNew<vtkPoints> points;
-	for(int vid=0 ; vid < V.rows() ; vid++){
-		points->InsertNextPoint(V.coeff(vid, 0), V.coeff(vid, 1), V.coeff(vid, 2));
-	}
+	points->SetData(pointsArray);			
 
 	vtkNew<vtkCellArray> triangles;
 	for(int fid=0 ; fid < F.rows() ; fid++){
@@ -59,57 +64,12 @@ vtkSmartPointer<vtkActor> MakeActor(vtkSmartPointer<vtkPolyData> polydata){
 }
 
 
-template <typename DerivedV, typename DerivedF>
-inline int readOFF(
-	const char * str,
-	Eigen::PlainObjectBase<DerivedV>& V,
-	Eigen::PlainObjectBase<DerivedF>& F)
-{
-	std::ifstream iFile(str);
-	if (!iFile) {
-        std::cerr << "not a file" << std::endl;
-        return 1;
-    }
-	std::string fT;
-	char ch;
-	int nV, nF, nN;
-	iFile >> fT;
-
-	if (fT.compare("OFF") != 0 && fT.compare("off") != 0) {
-        std::cerr << "compare off failed" << std::endl;
-        return 2;
-    }
-	iFile >> nV >> nF >> nN;
-
-	V.setConstant(nV, 3, 0);
-	for (int i = 0; i < nV; i++)
-		iFile >> V(i, 0) >> V(i, 1) >> V(i, 2);
-
-	F.setConstant(nF, 3, 0);
-	for (int i = 0; i < nF; i++)
-		iFile >> ch >> F(i, 0) >> F(i, 1) >> F(i, 2);
-
-	return 0;
-}
 
 
 
 
 int main(int argc, char *argv[]){
-
-    if (argc < 2) {
-		std::cout << "lack of mesh file and result file!\n";
-		std::cout << "run this program in format: test_FPS meshfile resultfile \n";
-		return 1;
-	}
-
-	Eigen::MatrixXd V;
-    Eigen::MatrixXi F;
-	if (readOFF(argv[1], V, F) != 0) {
-		std::cout << "read the file " << argv[1] << " failed";
-		return 2;
-	}
-
+    
 	// Initialize Renderer
     vtkNew<vtkRenderWindowInteractor> iren;
     iren->SetInteractorStyle(vtkSmartPointer<vtkInteractorStyleTrackballCamera>::New());
@@ -118,37 +78,32 @@ int main(int argc, char *argv[]){
     iren->SetRenderWindow(renWin);
     vtkNew<vtkRenderer> ren;
     renWin->AddRenderer(ren);
+	ren->SetGradientBackground(true);
+	ren->SetBackground(.2, .2, .2);
+	ren->SetBackground2(.9, .9, .9);
 
-    std::vector<int> start_points;
-
-    FastMarchingData fmdata;
-    fmdata.option.iter_max = 1000;
-	std::cout << "PrepareFastMarching..." << std::endl;
-	fmdata.PrepareFastMarching(V, F);
 
 	// Make Polydata and actor for rendering
-	vtkSmartPointer<vtkPolyData> polydata = MakePolyData(V, F);
+	vtkNew<vtkOBJReader> reader;
+	reader->SetFileName("../resources/sample_faust.obj");
+	reader->Update();
+
+
+	//read igl off file read test
+	Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic,  Eigen::RowMajor> V, U;
+	Eigen::MatrixXi F;
+	igl::read_triangle_mesh("../resources/decimated-knight.off", V, F);
+
+
+	vtkSmartPointer<vtkPolyData> polydata = MakePolyData(V, F);		
+
+
 	vtkSmartPointer<vtkActor> actor = MakeActor(polydata);
-
 	actor->GetProperty()->SetColor(1, 0, 0);
+	actor->GetProperty()->SetEdgeVisibility(true);
 	ren->AddActor(actor);
-
-
-	// Run Fast Decimation
-	// std::random_device rd;
-	// std::mt19937 gen(rd());
-	// std::uniform_int_distribution<> dis(0, V.rows() - 1);
-	// int n = 1;
-	// for (int i = 0; i < n; ++i)
-	// 	start_points.push_back(dis(gen));
-	// start_points[0] = 18842;
-	start_points.push_back(18842);
-
-	std::cout << "start FarthestPointSampling...\n";
-	fmdata.FarthestPointSampling(V, F, start_points, 20);
-	std::cout << "Done" << std::endl;
-	std::cout << V << std::endl;
-
+	
+	
 
 	ren->ResetCamera();
     renWin->Render();
