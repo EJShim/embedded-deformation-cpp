@@ -28,26 +28,10 @@
 template <typename DerivedV, typename DerivedF>
 vtkSmartPointer<vtkPolyData> MakePolyData(	Eigen::PlainObjectBase<DerivedV>& V, Eigen::PlainObjectBase<DerivedF>& F){
 	vtkNew<vtkDoubleArray> pointsArray;
-	pointsArray->SetArray(V.transpose().data(), V.size(), 1);	
+	pointsArray->SetArray(V.data(), V.size(), 0);	
 	pointsArray->SetNumberOfComponents(3);	
 	vtkNew<vtkPoints> points;
-	points->SetData(pointsArray);	
-	for(int vid=0 ; vid < V.rows() ; vid++){
-		// points->InsertNextPoint(V.coeff(vid, 0), V.coeff(vid, 1), V.coeff(vid, 2));
-
-		double* p = points->GetPoint(vid);
-		std::cout << p[0] << "," << p[1] << "," << p[2] << std::endl;
-		std::cout << V.row(vid) << std::endl;
-
-		std::cout << "----------" << std::endl;
-
-		if(vid == 10) break;
-
-	}
-
-	vtkIndent indent;
-	points->PrintSelf(std::cout, indent);
-
+	points->SetData(pointsArray);			
 
 	vtkNew<vtkCellArray> triangles;
 	for(int fid=0 ; fid < F.rows() ; fid++){
@@ -111,8 +95,7 @@ int main(int argc, char *argv[]){
 	igl::read_triangle_mesh("../resources/decimated-knight.off", V, F);
 
 
-	vtkSmartPointer<vtkPolyData> polydata = MakePolyData(V, F);	
-	// std::cout << V << std::endl;
+	vtkSmartPointer<vtkPolyData> polydata = MakePolyData(V, F);		
 
 
 	vtkSmartPointer<vtkActor> actor = MakeActor(polydata);
