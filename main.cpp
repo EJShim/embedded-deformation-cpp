@@ -11,23 +11,42 @@
 #include <vtkPolyDataMapper.h>
 #include <vtkActor.h>
 #include <vtkPolyDataReader.h>
-#include <vtkPoints.h>
 #include <vtkOpenGLSphereMapper.h>
 #include <vtkProperty.h>
 #include <vtkTriangle.h>
 #include <vtkCellArray.h>
 #include <random>
 #include <vtkOBJReader.h>
-#include <vtkQuadricDecimation.h>
+#include <vtkPoints.h>
+#include <vtkDoubleArray.h>
+#include <vtkDataArray.h>
+
 #include <igl/read_triangle_mesh.h>
 
 
-template <typename DerivedV, typename DerivedF>
-vtkSmartPointer<vtkPolyData> MakePolyData(	Eigen::PlainObjectBase<DerivedV>& V, Eigen::PlainObjectBase<DerivedF>& F){	
+//TODO : optimize this
+vtkSmartPointer<vtkPolyData> MakePolyData(	Eigen::MatrixXd &V, Eigen::MatrixXi &F){	
+	vtkNew<vtkDoubleArray> pointsArray;
+	pointsArray->SetArray(V.transpose().data(), V.size(), 1);	
+	pointsArray->SetNumberOfComponents(3);	
 	vtkNew<vtkPoints> points;
+	points->SetData(pointsArray);	
 	for(int vid=0 ; vid < V.rows() ; vid++){
-		points->InsertNextPoint(V.coeff(vid, 0), V.coeff(vid, 1), V.coeff(vid, 2));
+		// points->InsertNextPoint(V.coeff(vid, 0), V.coeff(vid, 1), V.coeff(vid, 2));
+
+		double* p = points->GetPoint(vid);
+		std::cout << p[0] << "," << p[1] << "," << p[2] << std::endl;
+		std::cout << V.row(vid) << std::endl;
+
+		std::cout << "----------" << std::endl;
+
+		if(vid == 10) break;
+
 	}
+
+	vtkIndent indent;
+	points->PrintSelf(std::cout, indent);
+
 
 	vtkNew<vtkCellArray> triangles;
 	for(int fid=0 ; fid < F.rows() ; fid++){
@@ -60,54 +79,12 @@ vtkSmartPointer<vtkActor> MakeActor(vtkSmartPointer<vtkPolyData> polydata){
 }
 
 
-template <typename DerivedV, typename DerivedF>
-inline int readOFF(const char * str,Eigen::PlainObjectBase<DerivedV>& V,Eigen::PlainObjectBase<DerivedF>& F)
-{
-	std::ifstream iFile(str);
-	if (!iFile) {
-        std::cerr << "not a file" << std::endl;
-        return 1;
-    }
-	std::string fT;
-	char ch;
-	int nV, nF, nN;
-	iFile >> fT;
-
-	if (fT.compare("OFF") != 0 && fT.compare("off") != 0) {
-        std::cerr << "compare off failed" << std::endl;
-        return 2;
-    }
-	iFile >> nV >> nF >> nN;
-
-	V.setConstant(nV, 3, 0);
-	for (int i = 0; i < nV; i++)
-		iFile >> V(i, 0) >> V(i, 1) >> V(i, 2);
-
-	F.setConstant(nF, 3, 0);
-	for (int i = 0; i < nF; i++)
-		iFile >> ch >> F(i, 0) >> F(i, 1) >> F(i, 2);
-
-	return 0;
-}
 
 
 
 
 int main(int argc, char *argv[]){
-
-    // if (argc < 2) {
-	// 	std::cout << "lack of mesh file and result file!\n";
-	// 	std::cout << "run this program in format: test_FPS meshfile resultfile \n";
-	// 	return 1;
-	// }
-
-	// Eigen::MatrixXd V;
-    // Eigen::MatrixXi F;
-	// if (readOFF(argv[1], V, F) != 0) {
-	// 	std::cout << "read the file " << argv[1] << " failed";
-	// 	return 2;
-	// }
-
+    
 	// Initialize Renderer
     vtkNew<vtkRenderWindowInteractor> iren;
     iren->SetInteractorStyle(vtkSmartPointer<vtkInteractorStyleTrackballCamera>::New());
@@ -126,33 +103,26 @@ int main(int argc, char *argv[]){
 	reader->SetFileName("../resources/sample_faust.obj");
 	reader->Update();
 
-	// vtkSmartPointer<vtkPolyData> polydata = MakePolyData(V, F);
-	vtkSmartPointer<vtkPolyData> polydata = reader->GetOutput();
+
+	//read igl off file read test
+	Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic,  Eigen::RowMajor> V, U;
+	Eigen::MatrixXi F;
+	igl::read_triangle_mesh("../resources/decimated-knight.off", V, F);
+
+	std::cout << V.rows() << ", " << V.cols() << std::endl;
+	V = V.transpose();
+	std::cout << V.rows() << "," << V.cols() << std::endl;
+
+
+	vtkSmartPointer<vtkPolyData> polydata = MakePolyData(V, F);	
+	// std::cout << V << std::endl;
+
+
 	vtkSmartPointer<vtkActor> actor = MakeActor(polydata);
 	actor->GetProperty()->SetColor(1, 0, 0);
 	actor->GetProperty()->SetEdgeVisibility(true);
 	ren->AddActor(actor);
 	
-
-
-	// //TODO : Decimate Plydata
-	// vtkNew<vtkQuadricDecimation> decimate;
-	// decimate->SetInputData(polydata);
-	// // decimate->AttributeErrorMetricOn();
-	// decimate->SetTargetReduction(.75);
-	// // decimate->VolumePreservationOn();
-	// decimate->Update();
-
-
-	// vtkSmartPointer<vtkPolyData> polydata_downsampled = decimate->GetOutput();
-	// vtkSmartPointer<vtkActor> actor_downsampled = MakeActor(polydata_downsampled);
-	// actor_downsampled->SetPosition(1, 0, 0);
-	// // actor_downsampled->GetProperty()->SetRepresentationToWireframe();
-	// actor_downsampled->GetProperty()->SetColor(1, 0, 1);
-	// actor_downsampled->GetProperty()->SetEdgeVisibility(true);
-	// ren->AddActor(actor_downsampled);
-	
-
 	
 
 	ren->ResetCamera();
