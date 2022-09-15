@@ -23,18 +23,49 @@
 #include "utils.hpp"
 #include <Eigen/Dense>
 
+
+class vtkTimerCallback : public vtkCommand
+{
+	public:
+	vtkTimerCallback() = default;
+
+	static vtkTimerCallback* New(){
+		vtkTimerCallback* cb = new vtkTimerCallback;
+		cb->TimerCount = 0;
+		return cb;
+	}
+
+	virtual void Execute(vtkObject* caller, unsigned long eventId, void* vtkNotUsed(callData) ){
+		if (vtkCommand::TimerEvent == eventId){
+			++this->TimerCount;
+		}
+		
+		SingleIteration();
+	}
+
+	void SingleIteration(){
+		std::cout << this->TimerCount << std::endl;
+	}
+
+	private:
+	int TimerCount = 0;
+};
+
+
 class InteractorStyle : public vtkInteractorStyleTrackballCamera{
 public:
 	static InteractorStyle* New(){return new InteractorStyle;}
 	vtkTypeMacro(InteractorStyle, vtkInteractorStyleTrackballCamera);
 
-	InteractorStyle(){}
+	InteractorStyle(){		
+	}
 	~InteractorStyle(){}
 
 protected:
 	vtkIdType m_pickedId;
 	double m_viewDistance = 0.5;
 	bool m_bSimulation = false;
+	int m_timerId = -1;
 
 	vtkSmartPointer<vtkRenderWindow> m_renWin;
 	vtkSmartPointer<vtkRenderer> m_ren;
@@ -43,6 +74,9 @@ protected:
 
 	vtkSmartPointer<vtkPolyData> m_controlPoints;
 	vtkSmartPointer<vtkActor> m_controlPointsActor;
+
+	//Simulator
+	vtkSmartPointer<vtkTimerCallback> m_Simulator;
 
 public:
 	void SetTargetPolyData(vtkSmartPointer<vtkPolyData> polydata){
@@ -80,11 +114,15 @@ public:
 		m_ren->AddActor(m_controlPointsActor);
 		m_renWin->Render();
 
+		//Intiialize Timer		
+		m_Simulator = vtkSmartPointer<vtkTimerCallback>::New();
+		this->GetInteractor()->AddObserver(vtkCommand::TimerEvent, m_Simulator);
+
 		Update();
 	}
 
 protected:
-	void Update(){
+	void Update(){		
 
 		vtkSmartPointer<vtkPointPicker> picker = static_cast<vtkPointPicker*>(this->GetInteractor()->GetPicker());
 
@@ -94,16 +132,25 @@ protected:
 			
 			picker->InitializePickList();
 			picker->AddPickList(m_controlPointsActor);			
+			
+			m_timerId = Interactor->CreateRepeatingTimer(100);
+			Interactor->Start();
 
+			
 		}else{
 			m_ren->SetBackground(.2, .2, .2);
 			m_ren->SetBackground2(.9, .9, .9);
 			
 			picker->InitializePickList();
-			picker->AddPickList(m_actor);	
+			picker->AddPickList(m_actor);			
+
+			if(m_timerId != -1) this->GetInteractor()->DestroyTimer(m_timerId);
 		}
 
 		m_renWin->Render();
+
+
+		
 	}
 
 	virtual void OnLeftButtonDown(){
@@ -177,7 +224,10 @@ protected:
 				CU(m_pickedId, 2) = worldPos[2];
 				
 				m_controlPoints->GetPoints()->Modified();
-				
+
+				// Simulate
+				m_Simulator->SingleIteration();
+
 				m_renWin->Render();
 			}
 		}
@@ -224,10 +274,10 @@ int main(int argc, char *argv[]){
     renWin->AddRenderer(ren);
 	ren->SetGradientBackground(true);
 
-
+	//Read Polydata
 	vtkSmartPointer<vtkPolyData> polydata = ReadPolyData(input_file);
 
-	
+	// Add to system
 	vtkNew<InteractorStyle> controller;
 	iren->SetInteractorStyle(controller);
 	controller->SetTargetPolyData(polydata);
@@ -236,6 +286,5 @@ int main(int argc, char *argv[]){
     renWin->Render();
     iren->Start();
 
-    // std::cout << "??" << std::endl;
     return 0;
 }
