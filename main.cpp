@@ -25,6 +25,7 @@
 #include <igl/polar_svd3x3.h>
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
+#include <cmath>
 #include "utils.hpp"
 
 
@@ -53,6 +54,8 @@ class vtkTimerCallback : public vtkCommand
 		}
 		
 		SingleIteration();
+		
+		static_cast<vtkRenderWindowInteractor*>(caller)->GetRenderWindow()->Render();
 	}
 
 	void Initialize(vtkSmartPointer<vtkPolyData> polydata, vtkSmartPointer<vtkPolyData> cotrolPoints){		
@@ -69,7 +72,7 @@ class vtkTimerCallback : public vtkCommand
 		Eigen::Matrix<vtkIdType, -1, -1, Eigen::RowMajor> F = F_raw(Eigen::all, {1,2,3});
 
 		// Extract Selected indices
-		Eigen::Map<Eigen::RowVectorXi> b((int*)cotrolPoints->GetPointData()->GetArray("Reference")->GetVoidPointer(0), cotrolPoints->GetNumberOfPoints() );
+		Eigen::Map<Eigen::VectorXi> b((int*)cotrolPoints->GetPointData()->GetArray("Reference")->GetVoidPointer(0), cotrolPoints->GetNumberOfPoints() );
 		
 
 		// cot matrix
@@ -113,7 +116,7 @@ class vtkTimerCallback : public vtkCommand
 		arap_K.setFromTriplets(tripletList.begin(), tripletList.end());
 	}
 
-	void SingleIteration(){		
+	void SingleIteration(){				
 		Eigen::Map<Eigen::Matrix<float, -1, -1, Eigen::RowMajor>> CU((float*)m_controlPoints->GetPoints()->GetData()->GetVoidPointer(0), m_controlPoints->GetNumberOfPoints(), 3);
 		Eigen::Map<Eigen::Matrix<float, -1, -1, Eigen::RowMajor>> V((float*)m_polydata->GetPoints()->GetData()->GetVoidPointer(0), m_polydata->GetNumberOfPoints(), 3);	
 		
@@ -136,7 +139,7 @@ class vtkTimerCallback : public vtkCommand
 
 		// assign U to polydtaa??
 		V = U;				
-		m_polydata->GetPoints()->Modified();
+		m_polydata->GetPoints()->Modified();		
 		
 	}
 
@@ -182,6 +185,12 @@ public:
 		m_actor = MakeActor(polydata);
 		m_actor->GetProperty()->SetColor(1, 1, 0);
 		m_actor->GetProperty()->SetEdgeVisibility(true);
+		double* bounds = m_actor->GetBounds();
+		double xlen = bounds[1] - bounds[0];
+		double ylen = bounds[2] - bounds[3];
+		double zlen = bounds[4] - bounds[5];
+		double length = sqrt(xlen*xlen + ylen*ylen + zlen*zlen);
+
 		m_ren->AddActor(m_actor);
 
 		//Initialize Control Points
@@ -198,7 +207,7 @@ public:
 		
 		vtkNew<vtkOpenGLSphereMapper> mapper;
 		mapper->SetInputData(m_controlPoints);
-		mapper->SetRadius(0.02);
+		mapper->SetRadius(length / 50);
 
 		m_controlPointsActor = vtkSmartPointer<vtkActor>::New();
 		m_controlPointsActor->SetMapper(mapper);
@@ -228,7 +237,7 @@ protected:
 			
 			m_Simulator->Initialize(m_polydata, m_controlPoints);
 			m_renWin->Render();
-			m_timerId = Interactor->CreateRepeatingTimer(100);
+			m_timerId = Interactor->CreateRepeatingTimer(10);
 			Interactor->Start();
 
 			
@@ -318,7 +327,7 @@ protected:
 				m_controlPoints->GetPoints()->Modified();
 
 				// Simulate
-				m_Simulator->SingleIteration();
+				m_Simulator->SingleIteration();				
 
 				m_renWin->Render();
 			}
@@ -376,13 +385,13 @@ int main(int argc, char *argv[]){
 
 
 	// origin
-	vtkNew<vtkSphereSource> originSource;
-	originSource->SetCenter(0, 0, 0);
-	originSource->Update();
-	vtkSmartPointer<vtkActor> origin = MakeActor(originSource->GetOutput());
-	origin->GetProperty()->SetColor(0, 0, 1);
-	origin->GetProperty()->SetRepresentationToWireframe();
-	ren->AddActor(origin);
+	// vtkNew<vtkSphereSource> originSource;
+	// originSource->SetCenter(0, 0, 0);
+	// originSource->Update();
+	// vtkSmartPointer<vtkActor> origin = MakeActor(originSource->GetOutput());
+	// origin->GetProperty()->SetColor(0, 0, 1);
+	// origin->GetProperty()->SetRepresentationToWireframe();
+	// ren->AddActor(origin);
 
 	ren->ResetCamera();
     renWin->Render();
