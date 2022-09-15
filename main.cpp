@@ -15,6 +15,8 @@
 #include <vtkSphereSource.h>
 #include <vtkOpenGLSphereMapper.h>
 #include <vtkVertex.h>
+#include <vtkIntArray.h>
+#include <vtkPointData.h>
 #include <igl/read_triangle_mesh.h>
 #include "utils.hpp"
 #include <Eigen/Dense>
@@ -64,6 +66,11 @@ public:
 		m_controlPoints = vtkSmartPointer<vtkPolyData>::New();		
 		m_controlPoints->SetPoints(vtkSmartPointer<vtkPoints>::New());
 		m_controlPoints->SetVerts(vtkSmartPointer<vtkCellArray>::New());
+
+		vtkNew<vtkIntArray> referencePoints;
+		referencePoints->SetName("Reference");
+		referencePoints->SetNumberOfComponents(1);
+		m_controlPoints->GetPointData()->AddArray(referencePoints);
 				
 		
 		vtkNew<vtkOpenGLSphereMapper> mapper;
@@ -81,19 +88,28 @@ public:
 protected:
 	virtual void OnLeftButtonDown(){
 
+		vtkSmartPointer<vtkPointPicker> picker = static_cast<vtkPointPicker*>(this->GetInteractor()->GetPicker());
 		int* pos = this->GetInteractor()->GetEventPosition();
-		bool m_propPicked = this->GetInteractor()->GetPicker()->Pick(pos[0], pos[1], 0, m_ren);
+		bool m_propPicked = picker->Pick(pos[0], pos[1], 0, m_ren);
 		
-		// double picked[3];
-
 
 		if(m_propPicked){
+			// Get Picked Position
 			Eigen::RowVector3d position;
-			this->GetInteractor()->GetPicker()->GetPickPosition(position.data());
+			picker->GetPickPosition(position.data());
 
+			// Get Poitn ID
+			vtkIdType pid = picker->GetPointId();			
+
+			// Add Point
 			m_controlPoints->GetPoints()->InsertNextPoint(position.data());
 			m_controlPoints->GetPoints()->Modified();
 			m_controlPoints->GetVerts()->InsertNextCell(vtkSmartPointer<vtkVertex>::New());
+			m_controlPoints->GetPointData()->GetArray("Reference")->InsertNextTuple1(pid);
+
+			// Eigen::Map<Eigen::Matrix<double, -1, -1, Eigen::RowMajor>> CU((double*)m_controlPoints->GetPoints()->GetData()->GetVoidPointer(0), m_controlPoints->GetNumberOfPoints(), 3);
+			// Eigen::Map<Eigen::RowVectorXi> b((int*)m_controlPoints->GetPointData()->GetArray("Reference")->GetVoidPointer(0), m_controlPoints->GetNumberOfPoints() );
+
 			
 			m_renWin->Render();
 
