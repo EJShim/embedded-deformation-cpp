@@ -20,17 +20,29 @@
 #include <vtkPointData.h>
 #include <vtkCoordinate.h>
 #include <igl/read_triangle_mesh.h>
-#include "utils.hpp"
+#include <igl/min_quad_with_fixed.h>
+#include <igl/cotmatrix.h>
+#include <igl/polar_svd3x3.h>
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
+#include "utils.hpp"
+
 
 
 class vtkTimerCallback : public vtkCommand
 {
-	public:
+	public:		
 	vtkTimerCallback() = default;
+
+	igl::min_quad_with_fixed_data<float> arap_data;
+	Eigen::SparseMatrix<float> arap_K;	
+	vtkSmartPointer<vtkPolyData> m_polydata;
+	vtkSmartPointer<vtkPolyData> m_controlPoints;
 
 	static vtkTimerCallback* New(){
 		vtkTimerCallback* cb = new vtkTimerCallback;
+		
+
 		cb->TimerCount = 0;
 		return cb;
 	}
@@ -43,8 +55,89 @@ class vtkTimerCallback : public vtkCommand
 		SingleIteration();
 	}
 
-	void SingleIteration(){
-		std::cout << this->TimerCount << std::endl;
+	void Initialize(vtkSmartPointer<vtkPolyData> polydata, vtkSmartPointer<vtkPolyData> cotrolPoints){		
+		m_polydata = polydata;
+		m_controlPoints = cotrolPoints;
+		
+
+		//Extract Vertices
+		Eigen::Map<Eigen::Matrix<float, -1, -1, Eigen::RowMajor>> V((float*)polydata->GetPoints()->GetData()->GetVoidPointer(0), polydata->GetNumberOfPoints(), 3);	
+
+		//Extract Faces
+		vtkIdType num_faces = polydata->GetPolys()->GetNumberOfCells();		
+		Eigen::Map<Eigen::Matrix<vtkIdType, -1, -1, Eigen::RowMajor>> F_raw((vtkIdType*)polydata->GetPolys()->GetData()->GetVoidPointer(0), num_faces ,4);	
+		Eigen::Matrix<vtkIdType, -1, -1, Eigen::RowMajor> F = F_raw(Eigen::all, {1,2,3});
+
+		// Extract Selected indices
+		Eigen::Map<Eigen::RowVectorXi> b((int*)cotrolPoints->GetPointData()->GetArray("Reference")->GetVoidPointer(0), cotrolPoints->GetNumberOfPoints() );
+		
+
+		// cot matrix
+		Eigen::SparseMatrix<float> L;  
+		igl::cotmatrix(V,F,L);
+
+		Eigen::SparseMatrix<float> Aeq;
+		igl::min_quad_with_fixed_precompute(L,b,Aeq,false,arap_data);
+
+		Eigen::MatrixXf CE;
+		igl::cotmatrix_entries(V, F, CE);
+
+		// Build K
+		
+		arap_K.resize(V.rows(),3*V.rows());
+		
+		typedef Eigen::Triplet<float> T;
+		std::vector<T> tripletList;
+		tripletList.reserve(F.rows()*3*6);
+
+
+		for (int f=0; f<F.rows(); f++){
+				for (int v=0; v<3; v++){
+				// for triangle meshes
+				int i = F(f, (v + 1)%3);
+				int j = F(f, (v + 2)%3);
+				// cot_v corresponds to the opposi₩te half edge
+			
+				Eigen::Vector3f eij = CE(f,v) * (V.row(i) - V.row(j));
+				eij = eij/3.0;
+			
+				for(int k=0; k<3; k++){
+					for(int t=0; t<3; t++){
+					tripletList.push_back(T(i, 3*F(f,k) + t, eij(t)));
+					tripletList.push_back(T(j, 3*F(f,k) + t, -eij(t)));
+					}
+				}      
+			}
+		}
+		
+		arap_K.setFromTriplets(tripletList.begin(), tripletList.end());
+	}
+
+	void SingleIteration(){		
+		Eigen::Map<Eigen::Matrix<float, -1, -1, Eigen::RowMajor>> CU((float*)m_controlPoints->GetPoints()->GetData()->GetVoidPointer(0), m_controlPoints->GetNumberOfPoints(), 3);
+		Eigen::Map<Eigen::Matrix<float, -1, -1, Eigen::RowMajor>> V((float*)m_polydata->GetPoints()->GetData()->GetVoidPointer(0), m_polydata->GetNumberOfPoints(), 3);	
+		
+		Eigen::MatrixXf C = arap_K.transpose() * V;
+
+		Eigen::MatrixXf R(3*arap_data.n, 3);
+		for (int k=0; k<arap_data.n; k++){
+			Eigen::Matrix3f Rk;
+			Eigen::Matrix3f Ck = C.block(k*3, 0, 3, 3);
+			igl::polar_svd3x3(Ck, Rk);
+			R.block(k*3, 0, 3, 3) = Rk;    
+	  	}
+
+		// from min_quad_with_fixed_solve code
+		Eigen::VectorXf Beq;
+		Eigen::MatrixXf B = arap_K*R;
+
+		Eigen::Matrix<float, -1, -1, Eigen::RowMajor> U = V;		
+		igl::min_quad_with_fixed_solve(arap_data, B, CU, Beq, U);		
+
+		// assign U to polydtaa??
+		V = U;				
+		m_polydata->GetPoints()->Modified();
+		
 	}
 
 	private:
@@ -85,7 +178,7 @@ public:
 		m_renWin = GetInteractor()->GetRenderWindow();
 		m_ren = m_renWin->GetRenderers()->GetFirstRenderer();
 
-		m_polydata = polydata;
+		m_polydata = polydata;		
 		m_actor = MakeActor(polydata);
 		m_actor->GetProperty()->SetColor(1, 1, 0);
 		m_actor->GetProperty()->SetEdgeVisibility(true);
@@ -93,7 +186,7 @@ public:
 
 		//Initialize Control Points
 		m_controlPoints = vtkSmartPointer<vtkPolyData>::New();		
-		m_controlPoints->SetPoints(vtkSmartPointer<vtkPoints>::New());
+		m_controlPoints->SetPoints(vtkSmartPointer<vtkPoints>::New());		
 		m_controlPoints->SetVerts(vtkSmartPointer<vtkCellArray>::New());
 
 
@@ -133,6 +226,8 @@ protected:
 			picker->InitializePickList();
 			picker->AddPickList(m_controlPointsActor);			
 			
+			m_Simulator->Initialize(m_polydata, m_controlPoints);
+			m_renWin->Render();
 			m_timerId = Interactor->CreateRepeatingTimer(100);
 			Interactor->Start();
 
@@ -148,9 +243,6 @@ protected:
 		}
 
 		m_renWin->Render();
-
-
-		
 	}
 
 	virtual void OnLeftButtonDown(){
@@ -219,9 +311,9 @@ protected:
 				Eigen::RowVector3d worldPos(m_ren->GetWorldPoint());
 								
 				// m_controlPoints->GetPoints()->SetPoint(m_pickedId, worldPos.data());	
-				CU(m_pickedId, 0) = worldPos[0];
-				CU(m_pickedId, 1) = worldPos[1];
-				CU(m_pickedId, 2) = worldPos[2];
+				CU(m_pickedId, 0) = (float)worldPos[0];
+				CU(m_pickedId, 1) = (float)worldPos[1];
+				CU(m_pickedId, 2) = (float)worldPos[2];
 				
 				m_controlPoints->GetPoints()->Modified();
 
@@ -245,7 +337,7 @@ protected:
 
 		if( keycode == 32 ){
 			m_bSimulation = !m_bSimulation;
-			Update();
+			Update();			
 		}
 
 		Superclass::OnKeyDown();
@@ -281,6 +373,16 @@ int main(int argc, char *argv[]){
 	vtkNew<InteractorStyle> controller;
 	iren->SetInteractorStyle(controller);
 	controller->SetTargetPolyData(polydata);
+
+
+	// origin
+	vtkNew<vtkSphereSource> originSource;
+	originSource->SetCenter(0, 0, 0);
+	originSource->Update();
+	vtkSmartPointer<vtkActor> origin = MakeActor(originSource->GetOutput());
+	origin->GetProperty()->SetColor(0, 0, 1);
+	origin->GetProperty()->SetRepresentationToWireframe();
+	ren->AddActor(origin);
 
 	ren->ResetCamera();
     renWin->Render();
