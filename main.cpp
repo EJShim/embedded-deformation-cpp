@@ -10,10 +10,112 @@
 #include <vtkActor.h>
 #include <vtkProperty.h>
 #include <vtkOBJReader.h>
+#include <vtkRendererCollection.h>
+#include <vtkPointPicker.h>
+#include <vtkSphereSource.h>
+#include <vtkOpenGLSphereMapper.h>
+#include <vtkVertex.h>
 #include <igl/read_triangle_mesh.h>
 #include "utils.hpp"
 #include <Eigen/Dense>
 
+
+class InteractorStyle : public vtkInteractorStyleTrackballCamera{
+public:
+	static InteractorStyle* New(){return new InteractorStyle;}
+	vtkTypeMacro(InteractorStyle, vtkInteractorStyleTrackballCamera);
+
+	InteractorStyle(){}
+	~InteractorStyle(){}
+
+protected:
+	bool m_propPicked= false;
+
+	vtkSmartPointer<vtkRenderWindow> m_renWin;
+	vtkSmartPointer<vtkRenderer> m_ren;
+	vtkSmartPointer<vtkPolyData> m_polydata;
+	vtkSmartPointer<vtkActor> m_actor;
+
+	vtkSmartPointer<vtkPolyData> m_controlPoints;
+
+public:
+	void SetTargetPolyData(vtkSmartPointer<vtkPolyData> polydata){
+		m_renWin = GetInteractor()->GetRenderWindow();
+		m_ren = m_renWin->GetRenderers()->GetFirstRenderer();
+
+
+		m_polydata = polydata;
+		m_actor = MakeActor(polydata);
+		m_actor->GetProperty()->SetColor(1, 1, 0);
+		m_actor->GetProperty()->SetEdgeVisibility(true);
+
+
+		this->GetInteractor()->GetPicker()->InitializePickList();
+		this->GetInteractor()->GetPicker()->AddPickList(m_actor);
+		this->GetInteractor()->GetPicker()->SetPickFromList(true);
+
+		//TEMP
+		// Eigen::Map<Eigen::Matrix<double, -1, -1, Eigen::RowMajor>> U((double*)polydata->GetPoints()->GetData()->GetVoidPointer(0), polydata->GetNumberOfPoints(), 3);	
+		// U(0,0) = 10;
+
+		m_ren->AddActor(m_actor);
+
+		//Initialize Control Points
+		m_controlPoints = vtkSmartPointer<vtkPolyData>::New();		
+		m_controlPoints->SetPoints(vtkSmartPointer<vtkPoints>::New());
+		m_controlPoints->SetVerts(vtkSmartPointer<vtkCellArray>::New());
+				
+		
+		vtkNew<vtkOpenGLSphereMapper> mapper;
+		mapper->SetInputData(m_controlPoints);
+		mapper->SetRadius(0.02);
+
+		vtkNew<vtkActor> actor;
+		actor->SetMapper(mapper);
+		actor->GetProperty()->SetColor(1, 0, 0);
+		m_ren->AddActor(actor);
+		m_renWin->Render();
+
+	}
+
+protected:
+	virtual void OnLeftButtonDown(){
+
+		int* pos = this->GetInteractor()->GetEventPosition();
+		bool m_propPicked = this->GetInteractor()->GetPicker()->Pick(pos[0], pos[1], 0, m_ren);
+		
+		// double picked[3];
+
+
+		if(m_propPicked){
+			Eigen::RowVector3d position;
+			this->GetInteractor()->GetPicker()->GetPickPosition(position.data());
+
+			m_controlPoints->GetPoints()->InsertNextPoint(position.data());
+			m_controlPoints->GetPoints()->Modified();
+			m_controlPoints->GetVerts()->InsertNextCell(vtkSmartPointer<vtkVertex>::New());
+			
+			m_renWin->Render();
+
+		}else{
+			Superclass::OnLeftButtonDown();
+		}		
+	}
+
+	virtual void OnMouseMove(){
+
+		if(!m_propPicked){
+			Superclass::OnMouseMove();
+		}			
+	}
+
+	virtual void OnLeftButtonUp(){
+		m_propPicked = false;
+
+		Superclass::OnLeftButtonUp();
+
+	}
+};
 
 int main(int argc, char *argv[]){
 
@@ -25,10 +127,11 @@ int main(int argc, char *argv[]){
 	}
 	std::cout << input_file << std::endl;
 
+
     
 	// Initialize Renderer
     vtkNew<vtkRenderWindowInteractor> iren;
-    iren->SetInteractorStyle(vtkSmartPointer<vtkInteractorStyleTrackballCamera>::New());
+	iren->SetPicker(vtkSmartPointer<vtkPointPicker>::New());
     vtkNew<vtkRenderWindow> renWin;
     renWin->SetSize(1000, 1000);
     iren->SetRenderWindow(renWin);
@@ -40,18 +143,12 @@ int main(int argc, char *argv[]){
 
 
 	vtkSmartPointer<vtkPolyData> polydata = ReadPolyData(input_file);
-	vtkSmartPointer<vtkActor> actor = MakeActor(polydata);
-	actor->GetProperty()->SetColor(1, 0, 0);
-	actor->GetProperty()->SetEdgeVisibility(true);
-	ren->AddActor(actor);
 
 	
-	// check if changing V affects polydata modification
-	// Assign V with new Eigen::matrix
-	Eigen::Map<Eigen::Matrix<double, -1, -1, Eigen::RowMajor>> U((double*)polydata->GetPoints()->GetData()->GetVoidPointer(0), polydata->GetNumberOfPoints(), 3);	
-	U(0,0) = 10;
+	vtkNew<InteractorStyle> controller;
+	iren->SetInteractorStyle(controller);
+	controller->SetTargetPolyData(polydata);
 
-	
 	ren->ResetCamera();
     renWin->Render();
     iren->Start();
