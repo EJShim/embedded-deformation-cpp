@@ -152,6 +152,9 @@ protected:
 
 	virtual void OnMouseMove(){
 
+		// Eigen test
+		Eigen::Map<Eigen::Matrix<float, -1, -1, Eigen::RowMajor>> CU((float*)m_controlPoints->GetPoints()->GetData()->GetVoidPointer(0), m_controlPoints->GetNumberOfPoints(), 3);
+
 		if(m_pickedId == -1){
 			Superclass::OnMouseMove();
 		}else{
@@ -168,9 +171,12 @@ protected:
 				m_ren->ViewToWorld();
 				Eigen::RowVector3d worldPos(m_ren->GetWorldPoint());
 								
-				m_controlPoints->GetPoints()->SetPoint(m_pickedId, worldPos.data());
+				// m_controlPoints->GetPoints()->SetPoint(m_pickedId, worldPos.data());	
+				CU(m_pickedId, 0) = worldPos[0];
+				CU(m_pickedId, 1) = worldPos[1];
+				CU(m_pickedId, 2) = worldPos[2];
+				
 				m_controlPoints->GetPoints()->Modified();
-
 				
 				m_renWin->Render();
 			}
