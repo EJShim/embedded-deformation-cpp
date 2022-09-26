@@ -75,7 +75,7 @@ class vtkTimerCallback : public vtkCommand
 		Eigen::Map<Eigen::VectorXi> b((int*)cotrolPoints->GetPointData()->GetArray("Reference")->GetVoidPointer(0), cotrolPoints->GetNumberOfPoints() );
 		
 
-		// cot matrix
+		// cot matrix	
 		Eigen::SparseMatrix<float> L;  
 		igl::cotmatrix(V,F,L);
 
