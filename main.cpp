@@ -23,10 +23,12 @@
 #include <igl/min_quad_with_fixed.h>
 #include <igl/cotmatrix.h>
 #include <igl/polar_svd3x3.h>
+#include <Eigen/Core>
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 #include <cmath>
 #include "utils.hpp"
+#include <igl/point_mesh_squared_distance.h>
 
 
 
@@ -69,7 +71,7 @@ class vtkTimerCallback : public vtkCommand
 		//Extract Faces
 		vtkIdType num_faces = polydata->GetPolys()->GetNumberOfCells();		
 		Eigen::Map<Eigen::Matrix<vtkIdType, -1, -1, Eigen::RowMajor>> F_raw((vtkIdType*)polydata->GetPolys()->GetData()->GetVoidPointer(0), num_faces ,4);	
-		Eigen::Matrix<vtkIdType, -1, -1, Eigen::RowMajor> F = F_raw(Eigen::all, {1,2,3});
+		Eigen::Matrix<vtkIdType, -1, -1, Eigen::RowMajor> F = F_raw(Eigen::all,{1,2,3});
 
 		// Extract Selected indices
 		Eigen::Map<Eigen::VectorXi> b((int*)cotrolPoints->GetPointData()->GetArray("Reference")->GetVoidPointer(0), cotrolPoints->GetNumberOfPoints() );
@@ -168,6 +170,9 @@ protected:
 	vtkSmartPointer<vtkPolyData> m_polydata;
 	vtkSmartPointer<vtkActor> m_actor;
 
+	vtkSmartPointer<vtkPolyData> m_hPoly;
+	vtkSmartPointer<vtkActor> m_hActor;
+
 	vtkSmartPointer<vtkPolyData> m_controlPoints;
 	vtkSmartPointer<vtkActor> m_controlPointsActor;
 
@@ -175,23 +180,27 @@ protected:
 	vtkSmartPointer<vtkTimerCallback> m_Simulator;
 
 public:
-	void SetTargetPolyData(vtkSmartPointer<vtkPolyData> polydata){
+	void SetTargetPolyData(vtkSmartPointer<vtkPolyData> polydata, vtkSmartPointer<vtkPolyData> h_polydata){
 		this->GetInteractor()->GetPicker()->SetPickFromList(true);
 
 		m_renWin = GetInteractor()->GetRenderWindow();
 		m_ren = m_renWin->GetRenderers()->GetFirstRenderer();
 
-		m_polydata = polydata;		
+		m_polydata = polydata;
 		m_actor = MakeActor(polydata);
 		m_actor->GetProperty()->SetColor(1, 1, 0);
 		m_actor->GetProperty()->SetEdgeVisibility(true);
+		m_actor->GetProperty()->SetOpacity(0.5);
 		double* bounds = m_actor->GetBounds();
 		double xlen = bounds[1] - bounds[0];
 		double ylen = bounds[2] - bounds[3];
 		double zlen = bounds[4] - bounds[5];
 		double length = sqrt(xlen*xlen + ylen*ylen + zlen*zlen);
-
 		m_ren->AddActor(m_actor);
+
+		m_hPoly = h_polydata;
+		m_hActor = MakeActor(h_polydata);
+		m_ren->AddActor(m_hActor);
 
 		//Initialize Control Points
 		m_controlPoints = vtkSmartPointer<vtkPolyData>::New();		
@@ -224,6 +233,11 @@ public:
 	}
 
 protected:
+
+	void CalculateBiHarmonic(){
+		
+	}
+
 	void Update(){		
 
 		vtkSmartPointer<vtkPointPicker> picker = static_cast<vtkPointPicker*>(this->GetInteractor()->GetPicker());
@@ -355,14 +369,45 @@ protected:
 
 int main(int argc, char *argv[]){
 
-	std::string input_file;
-	if(argc == 1){		
-		input_file = "../resources/decimated-knight.off";
-	}else{
-		input_file = argv[1];
-	}
-	std::cout << input_file << std::endl;
+	std::string input_file_low;
+	std::string input_file_high;
+	// if(argc == 1){		
+	input_file_low = "../resources/decimated-knight.off";
+	input_file_high = "../resources/knight.off";
+	
+	Eigen::MatrixXd low_v, high_v;
+	Eigen::MatrixXi low_f, high_f;		
+	igl::read_triangle_mesh(input_file_low, low_v, low_f);
+	igl::read_triangle_mesh(input_file_high, high_v, high_f);
 
+	std::cout << low_v.rows() << "," << low_v.cols() << std::endl;
+	std::cout << high_v.rows() << "," <<  high_v.cols() << std::endl;
+
+	Eigen::VectorXi J = Eigen::VectorXi::LinSpaced(high_v.rows(),0,high_v.rows()-1);
+	Eigen::VectorXi b;
+	Eigen::VectorXd sqrD;
+	Eigen::MatrixXd _2;
+
+	std::cout << J.rows() << std::endl;
+
+	igl::point_mesh_squared_distance(low_v,high_v,J,sqrD,b,_2);
+
+	std::cout << b.rows() << std::endl;
+	
+	igl::slice(high_v,b,1,low_v);
+	std::cout << low_v.rows() << "," << low_v.cols() << std::endl;
+
+	// low_v.rowwise() += Eigen::RowVector3d(0,1,0);
+	// std::cout << low_v << std::endl;
+
+	// std::cout << b[0] << "," <<  high_v.row(b[0]) << std::endl;
+	
+	// std::cout << b.rows() << std::endl;
+	// std::cout << low_v.rows() << "," << low_v.cols() << std::endl;
+
+
+	
+	return 0;
 
     
 	// Initialize Renderer
@@ -376,12 +421,13 @@ int main(int argc, char *argv[]){
 	ren->SetGradientBackground(true);
 
 	//Read Polydata
-	vtkSmartPointer<vtkPolyData> polydata = ReadPolyData(input_file);
+	vtkSmartPointer<vtkPolyData> polydata = ReadPolyData(input_file_low);
+	vtkSmartPointer<vtkPolyData> h_polydata = ReadPolyData(input_file_high);
 
 	// Add to system
 	vtkNew<InteractorStyle> controller;
 	iren->SetInteractorStyle(controller);
-	controller->SetTargetPolyData(polydata);
+	controller->SetTargetPolyData(polydata, h_polydata);
 
 
 	// origin

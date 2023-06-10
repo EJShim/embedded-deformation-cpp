@@ -9,6 +9,7 @@
 #include <vtkPolyDataMapper.h>
 #include <vtkActor.h>
 #include <vtkPLYReader.h>
+#include <igl/readMESH.h>
 
 template <typename DerivedV, typename DerivedF>
 vtkSmartPointer<vtkPolyData> MakePolyData(	Eigen::PlainObjectBase<DerivedV>& V, Eigen::PlainObjectBase<DerivedF>& F){
@@ -17,8 +18,8 @@ vtkSmartPointer<vtkPolyData> MakePolyData(	Eigen::PlainObjectBase<DerivedV>& V, 
 	// pointsArray->SetNumberOfComponents(3);	
 	vtkNew<vtkPoints> points;
 	// points->SetData(pointsArray); // <-- directly assign pointer
-	
-	for(int vid=0 ; vid < V.rows() ; vid++){
+	std::cout << "#############" << std::endl;
+	for(int vid=0 ; vid < V.rows() ; vid++){		
 		points->InsertNextPoint(V(vid, 0), V(vid, 1), V(vid, 2));
 	}
 
@@ -46,10 +47,12 @@ vtkSmartPointer<vtkPolyData> ReadPolyData(std::string filename){
 	std::string ext = filename.substr(filename.find_last_of(".")+1);
 	if(ext == "off"){
 		//read igl off file read test
-		Eigen::Matrix<double, -1, -1,  Eigen::RowMajor> V;
+		// Eigen::Matrix<double, -1, -1,  Eigen::RowMajor> V;
+		Eigen::MatrixXd V;
 		Eigen::MatrixXi F;	
-		igl::read_triangle_mesh(filename, V, F);
-
+		Eigen::MatrixXi T;	
+		igl::read_triangle_mesh(filename, V,F);
+		
 		results = MakePolyData(V, F);
 
 	}else if(ext == "obj"){
