@@ -401,7 +401,7 @@ int main(int argc, char *argv[]){
 	std::string input_file_high;
 	// if(argc == 1){		
 	input_file_low = "../resources/octopus-low.mesh";
-	input_file_high = "../resources/octopus-high.obj";
+	input_file_high = "../resources/octopus-high.mesh";
 	
 	Eigen::MatrixXd low_v, high_v;
 	Eigen::MatrixXi low_f, high_f;
@@ -417,7 +417,10 @@ int main(int argc, char *argv[]){
     igl::slice(Eigen::MatrixXd(low_v),J,1,low_v);	
 	
 	
-	igl::read_triangle_mesh(input_file_high, high_v, high_f);
+	igl::readMESH(input_file_high, high_v, high_t, high_f);
+	igl::remove_unreferenced(high_v.rows(),high_f,I,J);
+    std::for_each(high_f.data(),high_f.data()+high_f.size(),[&I](int & a){a=I(a);});
+    igl::slice(Eigen::MatrixXd(high_v),J,1,high_v);	
 
 	// Test TEtgen hihg
 	// Tetrahedralized interior
