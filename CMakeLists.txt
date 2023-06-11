@@ -13,7 +13,11 @@ add_executable(
   main.cpp
   )
 
-target_link_libraries(edl PRIVATE ${VTK_LIBRARIES} igl::core)
+target_link_libraries(edl PRIVATE 
+  ${VTK_LIBRARIES} 
+  igl::core
+  igl_copyleft::tetgen
+  )
 # vtk_module_autoinit is needed
 vtk_module_autoinit(
   TARGETS edl

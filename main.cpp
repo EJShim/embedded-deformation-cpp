@@ -20,6 +20,7 @@
 #include <vtkPointData.h>
 #include <vtkCoordinate.h>
 #include <igl/read_triangle_mesh.h>
+#include <igl/readMESH.h>
 #include <igl/min_quad_with_fixed.h>
 #include <igl/cotmatrix.h>
 #include <igl/polar_svd3x3.h>
@@ -29,7 +30,9 @@
 #include <cmath>
 #include "utils.hpp"
 #include <igl/point_mesh_squared_distance.h>
-
+#include <igl/copyleft/tetgen/tetrahedralize.h>
+#include <igl/biharmonic_coordinates.h>
+#include <igl/remove_unreferenced.h>
 
 
 class vtkTimerCallback : public vtkCommand
@@ -40,7 +43,10 @@ class vtkTimerCallback : public vtkCommand
 	igl::min_quad_with_fixed_data<float> arap_data;
 	Eigen::SparseMatrix<float> arap_K;	
 	vtkSmartPointer<vtkPolyData> m_polydata;
+	vtkSmartPointer<vtkPolyData> m_highPolyData;
 	vtkSmartPointer<vtkPolyData> m_controlPoints;
+	Eigen::MatrixXf m_biharmonic_w;
+
 
 	static vtkTimerCallback* New(){
 		vtkTimerCallback* cb = new vtkTimerCallback;
@@ -58,6 +64,14 @@ class vtkTimerCallback : public vtkCommand
 		SingleIteration();
 		
 		static_cast<vtkRenderWindowInteractor*>(caller)->GetRenderWindow()->Render();
+	}
+
+	void SetBiHarmonicWeights(Eigen::MatrixXf w){
+		m_biharmonic_w = w;
+	}
+
+	void SetHighPolyData(vtkSmartPointer<vtkPolyData> polydtaa){
+		m_highPolyData = polydtaa;
 	}
 
 	void Initialize(vtkSmartPointer<vtkPolyData> polydata, vtkSmartPointer<vtkPolyData> cotrolPoints){		
@@ -121,6 +135,7 @@ class vtkTimerCallback : public vtkCommand
 	void SingleIteration(){				
 		Eigen::Map<Eigen::Matrix<float, -1, -1, Eigen::RowMajor>> CU((float*)m_controlPoints->GetPoints()->GetData()->GetVoidPointer(0), m_controlPoints->GetNumberOfPoints(), 3);
 		Eigen::Map<Eigen::Matrix<float, -1, -1, Eigen::RowMajor>> V((float*)m_polydata->GetPoints()->GetData()->GetVoidPointer(0), m_polydata->GetNumberOfPoints(), 3);	
+		Eigen::Map<Eigen::Matrix<float, -1, -1, Eigen::RowMajor>> H_V((float*)m_highPolyData->GetPoints()->GetData()->GetVoidPointer(0), m_highPolyData->GetNumberOfPoints(), 3);	
 		
 		Eigen::MatrixXf C = arap_K.transpose() * V;
 
@@ -141,7 +156,11 @@ class vtkTimerCallback : public vtkCommand
 
 		// assign U to polydtaa??
 		V = U;				
+		// std::cout << m_biharmonic_w.rows() << "," << m_biharmonic_w.cols() << "," << H_V.rows() << std::endl;
+		
+		H_V = m_biharmonic_w * U;
 		m_polydata->GetPoints()->Modified();		
+		m_highPolyData->GetPoints()->Modified();		
 		
 	}
 
@@ -180,6 +199,11 @@ protected:
 	vtkSmartPointer<vtkTimerCallback> m_Simulator;
 
 public:
+	void SetBiharmonicWeights(Eigen::MatrixXf w){
+		m_Simulator->SetBiHarmonicWeights(w);
+	}
+
+
 	void SetTargetPolyData(vtkSmartPointer<vtkPolyData> polydata, vtkSmartPointer<vtkPolyData> h_polydata){
 		this->GetInteractor()->GetPicker()->SetPickFromList(true);
 
@@ -196,11 +220,13 @@ public:
 		double ylen = bounds[2] - bounds[3];
 		double zlen = bounds[4] - bounds[5];
 		double length = sqrt(xlen*xlen + ylen*ylen + zlen*zlen);
-		m_ren->AddActor(m_actor);
+		// m_ren->AddActor(m_actor);
 
 		m_hPoly = h_polydata;
 		m_hActor = MakeActor(h_polydata);
 		m_ren->AddActor(m_hActor);
+
+		CalculateBiHarmonic(m_polydata, m_hPoly);
 
 		//Initialize Control Points
 		m_controlPoints = vtkSmartPointer<vtkPolyData>::New();		
@@ -234,7 +260,8 @@ public:
 
 protected:
 
-	void CalculateBiHarmonic(){
+	void CalculateBiHarmonic(vtkSmartPointer<vtkPolyData> low, vtkSmartPointer<vtkPolyData> high){
+
 		
 	}
 
@@ -250,6 +277,7 @@ protected:
 			picker->AddPickList(m_controlPointsActor);			
 			
 			m_Simulator->Initialize(m_polydata, m_controlPoints);
+			m_Simulator->SetHighPolyData(m_hPoly);
 			m_renWin->Render();
 			m_timerId = Interactor->CreateRepeatingTimer(10);
 			Interactor->Start();
@@ -372,43 +400,36 @@ int main(int argc, char *argv[]){
 	std::string input_file_low;
 	std::string input_file_high;
 	// if(argc == 1){		
-	input_file_low = "../resources/decimated-knight.off";
-	input_file_high = "../resources/knight.off";
+	input_file_low = "../resources/octopus-low.mesh";
+	input_file_high = "../resources/octopus-high.obj";
 	
 	Eigen::MatrixXd low_v, high_v;
-	Eigen::MatrixXi low_f, high_f;		
-	igl::read_triangle_mesh(input_file_low, low_v, low_f);
+	Eigen::MatrixXi low_f, high_f;
+	Eigen::MatrixXi low_t, high_t;		
+	igl::readMESH(input_file_low, low_v, low_t, low_f);
+	std::cout << low_v.rows() << std::endl;
+	std::cout << low_v << std::endl;
+
+
+	Eigen::VectorXi I,J;
+	igl::remove_unreferenced(low_v.rows(),low_f,I,J);
+    std::for_each(low_f.data(),low_f.data()+low_f.size(),[&I](int & a){a=I(a);});
+    igl::slice(Eigen::MatrixXd(low_v),J,1,low_v);	
+	
+	
 	igl::read_triangle_mesh(input_file_high, high_v, high_f);
 
-	std::cout << low_v.rows() << "," << low_v.cols() << std::endl;
-	std::cout << high_v.rows() << "," <<  high_v.cols() << std::endl;
-
-	Eigen::VectorXi J = Eigen::VectorXi::LinSpaced(high_v.rows(),0,high_v.rows()-1);
-	Eigen::VectorXi b;
-	Eigen::VectorXd sqrD;
-	Eigen::MatrixXd _2;
-
-	std::cout << J.rows() << std::endl;
-
-	igl::point_mesh_squared_distance(low_v,high_v,J,sqrD,b,_2);
-
-	std::cout << b.rows() << std::endl;
+	// Test TEtgen hihg
+	// Tetrahedralized interior
+	// Eigen::MatrixXd TV;
+	// Eigen::MatrixXi TT;
+	// Eigen::MatrixXi TF;
+	// igl::copyleft::tetgen::tetrahedralize(high_v, high_f, "pq1.414Y", TV,TT,TF);
+	// std::cout << TV.rows() << "," << TT.rows() << "," << TF.rows() << std::endl;
 	
-	igl::slice(high_v,b,1,low_v);
-	std::cout << low_v.rows() << "," << low_v.cols() << std::endl;
-
-	// low_v.rowwise() += Eigen::RowVector3d(0,1,0);
-	// std::cout << low_v << std::endl;
-
-	// std::cout << b[0] << "," <<  high_v.row(b[0]) << std::endl;
-	
-	// std::cout << b.rows() << std::endl;
-	// std::cout << low_v.rows() << "," << low_v.cols() << std::endl;
 
 
 	
-	return 0;
-
     
 	// Initialize Renderer
     vtkNew<vtkRenderWindowInteractor> iren;
@@ -430,15 +451,24 @@ int main(int argc, char *argv[]){
 	controller->SetTargetPolyData(polydata, h_polydata);
 
 
-	// origin
-	// vtkNew<vtkSphereSource> originSource;
-	// originSource->SetCenter(0, 0, 0);
-	// originSource->Update();
-	// vtkSmartPointer<vtkActor> origin = MakeActor(originSource->GetOutput());
-	// origin->GetProperty()->SetColor(0, 0, 1);
-	// origin->GetProperty()->SetRepresentationToWireframe();
-	// ren->AddActor(origin);
+	// Calculate W here, because it is too 귀찮음 
+	Eigen::VectorXi b;
+    {
 
+        Eigen::VectorXi J = Eigen::VectorXi::LinSpaced(high_v.rows(),0,high_v.rows()-1);
+        Eigen::VectorXd sqrD;
+        Eigen::MatrixXd _2;
+        igl::point_mesh_squared_distance(low_v,high_v,J,sqrD,b,_2);
+    }
+	std::vector<std::vector<int> > S;
+    igl::matrix_to_list(b,S);
+	cout<<"Computing weights for "<<b.size()<< " handles at "<<high_v.rows()<<" vertices..."<<endl;
+	const int k = 2;
+	Eigen::MatrixXd W;
+    igl::biharmonic_coordinates(high_v, high_f,S,k,W);
+	std::cout << W.rows() << "," << W.cols() << std::endl;
+	controller->SetBiharmonicWeights(W.cast<float>());
+	
 	ren->ResetCamera();
     renWin->Render();
     iren->Start();
