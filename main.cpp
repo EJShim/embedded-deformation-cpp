@@ -30,7 +30,7 @@
 #include <cmath>
 #include "utils.hpp"
 #include <igl/point_mesh_squared_distance.h>
-#include <igl/copyleft/tetgen/tetrahedralize.h>
+// #include <igl/copyleft/tetgen/tetrahedralize.h>
 #include <igl/biharmonic_coordinates.h>
 #include <igl/remove_unreferenced.h>
 
@@ -442,8 +442,10 @@ int main(int argc, char *argv[]){
 	ren->SetGradientBackground(true);
 
 	//Read Polydata
-	vtkSmartPointer<vtkPolyData> polydata = ReadPolyData(input_file_low);
-	vtkSmartPointer<vtkPolyData> h_polydata = ReadPolyData(input_file_high);
+	vtkSmartPointer<vtkPolyData> polydata = MakePolyData(low_v, low_f);
+	vtkSmartPointer<vtkPolyData> h_polydata = MakePolyData(high_v, high_f);
+
+	std::cout << polydata->GetNumberOfPoints() << std::endl;
 
 	// Add to system
 	vtkNew<InteractorStyle> controller;
