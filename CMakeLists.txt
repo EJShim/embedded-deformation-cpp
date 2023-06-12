@@ -9,17 +9,17 @@ find_package(VTK REQUIRED)
 
 
 add_executable(
-  edl_biharmonic_tet 
+  edl_biharmonic_face
   main.cpp
   )
 
-target_link_libraries(edl_biharmonic_tet PRIVATE 
+target_link_libraries(edl_biharmonic_face PRIVATE 
   ${VTK_LIBRARIES} 
   igl::core
   # igl_copyleft::tetgen
   )
 # vtk_module_autoinit is needed
 vtk_module_autoinit(
-  TARGETS edl_biharmonic_tet
+  TARGETS edl_biharmonic_face
   MODULES ${VTK_LIBRARIES}
 )

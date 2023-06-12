@@ -224,7 +224,7 @@ public:
 
 		m_hPoly = h_polydata;
 		m_hActor = MakeActor(h_polydata);
-		m_hActor->SetPosition(1,0,0);
+		m_hActor->SetPosition(xlen * 1.1,0,0);
 		m_ren->AddActor(m_hActor);
 
 		CalculateBiHarmonic(m_polydata, m_hPoly);
@@ -401,15 +401,15 @@ int main(int argc, char *argv[]){
 	std::string input_file_low;
 	std::string input_file_high;
 	// if(argc == 1){		
-	input_file_low = "../resources/octopus-low.mesh";
-	input_file_high = "../resources/octopus-high.mesh";
+	input_file_low = "../resources/vmod_low.ply";
+	input_file_high = "../resources/vmod_high.ply";
 	
 	Eigen::MatrixXd low_v, high_v;
-	Eigen::MatrixXi low_f, high_f;
-	Eigen::MatrixXi low_t, high_t;		
-	igl::readMESH(input_file_low, low_v, low_t, low_f);	
-	igl::readMESH(input_file_high, high_v, high_t, high_f);
-	
+	Eigen::MatrixXi low_f, high_f;		
+	igl::read_triangle_mesh(input_file_low, low_v, low_f);	
+	igl::read_triangle_mesh(input_file_high, high_v, high_f);
+
+
 		
 	
 	// Remove Unreferenced -  low
@@ -417,6 +417,11 @@ int main(int argc, char *argv[]){
 	igl::remove_unreferenced(low_v.rows(),low_f,I,J);
     std::for_each(low_f.data(),low_f.data()+low_f.size(),[&I](int & a){a=I(a);});
     igl::slice(Eigen::MatrixXd(low_v),J,1,low_v);		
+
+	igl::remove_unreferenced(high_v.rows(),high_f,I,J);
+    std::for_each(high_f.data(),high_f.data()+high_f.size(),[&I](int & a){a=I(a);});
+	igl::slice(Eigen::MatrixXd(high_v),J,1,high_v);		
+
 	
 	
 	
@@ -437,18 +442,18 @@ int main(int argc, char *argv[]){
 	cout<<"Computing weights for "<<b.size()<< " handles at "<<high_v.rows()<<" vertices..."<<endl;
 	const int k = 2;
 	Eigen::MatrixXd W;
-    igl::biharmonic_coordinates(high_v, high_t,S,k,W);
+    igl::biharmonic_coordinates(high_v, high_f,S,k,W);
 	std::cout << W.rows() << "," << W.cols() << std::endl;
 
 
 
-	// Remove Unreferenced - high
-	igl::remove_unreferenced(high_v.rows(),high_f,I,J);
-    std::for_each(high_f.data(),high_f.data()+high_f.size(),[&I](int & a){a=I(a);});
-	// std::for_each(b.data(),b.data()+b.size(),[&I](int & a){a=I(a);});
+	// // Remove Unreferenced - high
+	// igl::remove_unreferenced(high_v.rows(),high_f,I,J);
+    // std::for_each(high_f.data(),high_f.data()+high_f.size(),[&I](int & a){a=I(a);});
+	// // std::for_each(b.data(),b.data()+b.size(),[&I](int & a){a=I(a);});
 
-    igl::slice(Eigen::MatrixXd(high_v),J,1,high_v);		
-	igl::slice(Eigen::MatrixXd(W),J,1,W);
+    // igl::slice(Eigen::MatrixXd(high_v),J,1,high_v);		
+	// igl::slice(Eigen::MatrixXd(W),J,1,W);
 
 	
 
