@@ -220,10 +220,11 @@ public:
 		double ylen = bounds[2] - bounds[3];
 		double zlen = bounds[4] - bounds[5];
 		double length = sqrt(xlen*xlen + ylen*ylen + zlen*zlen);
-		// m_ren->AddActor(m_actor);
+		m_ren->AddActor(m_actor);
 
 		m_hPoly = h_polydata;
 		m_hActor = MakeActor(h_polydata);
+		m_hActor->SetPosition(1,0,0);
 		m_ren->AddActor(m_hActor);
 
 		CalculateBiHarmonic(m_polydata, m_hPoly);
@@ -401,23 +402,57 @@ int main(int argc, char *argv[]){
 	std::string input_file_high;
 	// if(argc == 1){		
 	input_file_low = "../resources/octopus-low.mesh";
-	input_file_high = "../resources/octopus-high.obj";
+	input_file_high = "../resources/octopus-high.mesh";
 	
 	Eigen::MatrixXd low_v, high_v;
 	Eigen::MatrixXi low_f, high_f;
 	Eigen::MatrixXi low_t, high_t;		
-	igl::readMESH(input_file_low, low_v, low_t, low_f);
-	std::cout << low_v.rows() << std::endl;
-	std::cout << low_v << std::endl;
-
-
+	igl::readMESH(input_file_low, low_v, low_t, low_f);	
+	igl::readMESH(input_file_high, high_v, high_t, high_f);
+	
+		
+	
+	// Remove Unreferenced -  low
 	Eigen::VectorXi I,J;
 	igl::remove_unreferenced(low_v.rows(),low_f,I,J);
     std::for_each(low_f.data(),low_f.data()+low_f.size(),[&I](int & a){a=I(a);});
-    igl::slice(Eigen::MatrixXd(low_v),J,1,low_v);	
+    igl::slice(Eigen::MatrixXd(low_v),J,1,low_v);		
 	
 	
-	igl::read_triangle_mesh(input_file_high, high_v, high_f);
+	
+	// Calculate W here, because it is too 귀찮음 
+	Eigen::VectorXi b;
+    {
+
+        Eigen::VectorXi J = Eigen::VectorXi::LinSpaced(high_v.rows(),0,high_v.rows()-1);
+        Eigen::VectorXd sqrD;
+        Eigen::MatrixXd _2;
+        igl::point_mesh_squared_distance(low_v,high_v,J,sqrD,b,_2);
+    }
+	// igl::slice(high_v,b,1,low_v);
+
+
+	std::vector<std::vector<int> > S;
+    igl::matrix_to_list(b,S);
+	cout<<"Computing weights for "<<b.size()<< " handles at "<<high_v.rows()<<" vertices..."<<endl;
+	const int k = 2;
+	Eigen::MatrixXd W;
+    igl::biharmonic_coordinates(high_v, high_t,S,k,W);
+	std::cout << W.rows() << "," << W.cols() << std::endl;
+
+
+
+	// Remove Unreferenced - high
+	igl::remove_unreferenced(high_v.rows(),high_f,I,J);
+    std::for_each(high_f.data(),high_f.data()+high_f.size(),[&I](int & a){a=I(a);});
+	// std::for_each(b.data(),b.data()+b.size(),[&I](int & a){a=I(a);});
+
+    igl::slice(Eigen::MatrixXd(high_v),J,1,high_v);		
+	igl::slice(Eigen::MatrixXd(W),J,1,W);
+
+	
+
+	
 
 	// Test TEtgen hihg
 	// Tetrahedralized interior
@@ -451,24 +486,6 @@ int main(int argc, char *argv[]){
 	vtkNew<InteractorStyle> controller;
 	iren->SetInteractorStyle(controller);
 	controller->SetTargetPolyData(polydata, h_polydata);
-
-
-	// Calculate W here, because it is too 귀찮음 
-	Eigen::VectorXi b;
-    {
-
-        Eigen::VectorXi J = Eigen::VectorXi::LinSpaced(high_v.rows(),0,high_v.rows()-1);
-        Eigen::VectorXd sqrD;
-        Eigen::MatrixXd _2;
-        igl::point_mesh_squared_distance(low_v,high_v,J,sqrD,b,_2);
-    }
-	std::vector<std::vector<int> > S;
-    igl::matrix_to_list(b,S);
-	cout<<"Computing weights for "<<b.size()<< " handles at "<<high_v.rows()<<" vertices..."<<endl;
-	const int k = 2;
-	Eigen::MatrixXd W;
-    igl::biharmonic_coordinates(high_v, high_f,S,k,W);
-	std::cout << W.rows() << "," << W.cols() << std::endl;
 	controller->SetBiharmonicWeights(W.cast<float>());
 	
 	ren->ResetCamera();

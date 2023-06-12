@@ -18,7 +18,7 @@ vtkSmartPointer<vtkPolyData> MakePolyData(	Eigen::PlainObjectBase<DerivedV>& V, 
 	// pointsArray->SetNumberOfComponents(3);	
 	vtkNew<vtkPoints> points;
 	// points->SetData(pointsArray); // <-- directly assign pointer
-	std::cout << "#############" << std::endl;
+	
 	for(int vid=0 ; vid < V.rows() ; vid++){		
 		points->InsertNextPoint(V(vid, 0), V(vid, 1), V(vid, 2));
 	}
