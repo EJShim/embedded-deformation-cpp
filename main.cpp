@@ -14,6 +14,7 @@
 #include <vtkPointPicker.h>
 #include <vtkSphereSource.h>
 #include <vtkOpenGLSphereMapper.h>
+#include <vtkUnstructuredGrid.h>
 #include <vtkVertex.h>
 #include <vtkIntArray.h>
 #include <vtkIdList.h>
@@ -43,7 +44,7 @@ class vtkTimerCallback : public vtkCommand
 	igl::min_quad_with_fixed_data<float> arap_data;
 	Eigen::SparseMatrix<float> arap_K;	
 	vtkSmartPointer<vtkPolyData> m_polydata;
-	vtkSmartPointer<vtkPolyData> m_highPolyData;
+	vtkSmartPointer<vtkUnstructuredGrid> m_highPolyData;
 	vtkSmartPointer<vtkPolyData> m_controlPoints;
 	Eigen::MatrixXf m_biharmonic_w;
 
@@ -70,7 +71,7 @@ class vtkTimerCallback : public vtkCommand
 		m_biharmonic_w = w;
 	}
 
-	void SetHighPolyData(vtkSmartPointer<vtkPolyData> polydtaa){
+	void SetHighPolyData(vtkSmartPointer<vtkUnstructuredGrid> polydtaa){
 		m_highPolyData = polydtaa;
 	}
 
@@ -189,7 +190,7 @@ protected:
 	vtkSmartPointer<vtkPolyData> m_polydata;
 	vtkSmartPointer<vtkActor> m_actor;
 
-	vtkSmartPointer<vtkPolyData> m_hPoly;
+	vtkSmartPointer<vtkUnstructuredGrid> m_hPoly;
 	vtkSmartPointer<vtkActor> m_hActor;
 
 	vtkSmartPointer<vtkPolyData> m_controlPoints;
@@ -204,7 +205,7 @@ public:
 	}
 
 
-	void SetTargetPolyData(vtkSmartPointer<vtkPolyData> polydata, vtkSmartPointer<vtkPolyData> h_polydata){
+	void SetTargetPolyData(vtkSmartPointer<vtkPolyData> polydata, vtkSmartPointer<vtkUnstructuredGrid> h_polydata){
 		this->GetInteractor()->GetPicker()->SetPickFromList(true);
 
 		m_renWin = GetInteractor()->GetRenderWindow();
@@ -415,8 +416,8 @@ int main(int argc, char *argv[]){
 	
 	
 	igl::readMESH(input_file_high, high_v, high_t, high_f);
-	igl::remove_unreferenced(high_v.rows(),high_f,I,J);
-    std::for_each(high_f.data(),high_f.data()+high_f.size(),[&I](int & a){a=I(a);});
+	igl::remove_unreferenced(high_v.rows(),high_t,I,J);
+    std::for_each(high_t.data(),high_t.data()+high_t.size(),[&I](int & a){a=I(a);});
     igl::slice(Eigen::MatrixXd(high_v),J,1,high_v_s);	
 
 
@@ -434,11 +435,8 @@ int main(int argc, char *argv[]){
 	cout<<"Computing weights for "<<b.size()<< " handles at "<<high_v_s.rows()<<" vertices..."<<endl;
 	const int k = 2;
 	Eigen::MatrixXd W;
-    igl::biharmonic_coordinates(high_v_s, high_f,S,k,W);
+    igl::biharmonic_coordinates(high_v_s, high_t,S,k,W);
 	std::cout << W.rows() << "," << W.cols() << std::endl;
-	
-
-
 	
     
 	// Initialize Renderer
@@ -453,14 +451,18 @@ int main(int argc, char *argv[]){
 
 	//Read Polydata
 	vtkSmartPointer<vtkPolyData> polydata = MakePolyData(low_v_s, low_f);
-	vtkSmartPointer<vtkPolyData> h_polydata = MakePolyData(high_v_s, high_f);
-
-	std::cout << polydata->GetNumberOfPoints() << std::endl;
+	// vtkSmartPointer<vtkPolyData> h_polydata = MakePolyData(high_v_s, high_f);
+	
+	vtkSmartPointer<vtkUnstructuredGrid> h_ugrid = MakeUnstructuredGrid(high_v, high_t);
+	// vtkSmartPointer<vtkActor> high_actor = MakeActor(h_ugrid);
+	// high_actor->SetPosition(1,1,0);
+	// ren->AddActor(high_actor);
+	
 
 	// Add to system
 	vtkNew<InteractorStyle> controller;
 	iren->SetInteractorStyle(controller);
-	controller->SetTargetPolyData(polydata, h_polydata);
+	controller->SetTargetPolyData(polydata, h_ugrid);
 	controller->SetBiharmonicWeights(W.cast<float>());
 	
 	ren->ResetCamera();
