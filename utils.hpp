@@ -9,6 +9,9 @@
 #include <vtkPolyDataMapper.h>
 #include <vtkActor.h>
 #include <vtkPLYReader.h>
+#include <vtkUnstructuredGrid.h>
+#include <vtkTetra.h>
+#include <vtkDataSetMapper.h>
 #include <igl/readMESH.h>
 
 template <typename DerivedV, typename DerivedF>
@@ -75,6 +78,41 @@ vtkSmartPointer<vtkActor> MakeActor(vtkSmartPointer<vtkPolyData> polydata){
 
 	vtkNew<vtkPolyDataMapper> mapper;
 	mapper->SetInputData(polydata);
+
+	vtkNew<vtkActor> actor;
+	actor->SetMapper(mapper);
+
+
+	return actor;
+}
+
+template <typename DerivedV, typename DerivedF>
+vtkSmartPointer<vtkUnstructuredGrid> MakeUnstructuredGrid(Eigen::PlainObjectBase<DerivedV>& V, Eigen::PlainObjectBase<DerivedF>& T) {
+	vtkNew<vtkPoints> points;
+	for(int vid = 0; vid < V.rows(); ++vid) {
+		points->InsertNextPoint(V(vid, 0), V(vid, 1), V(vid, 2));
+	}
+
+	vtkNew<vtkUnstructuredGrid> ugrid;
+	ugrid->SetPoints(points);
+
+	for(int tid = 0; tid < T.rows(); ++tid) {
+		vtkNew<vtkTetra> tetra;
+		tetra->GetPointIds()->SetId(0, T(tid, 0));
+		tetra->GetPointIds()->SetId(1, T(tid, 1));
+		tetra->GetPointIds()->SetId(2, T(tid, 2));
+		tetra->GetPointIds()->SetId(3, T(tid, 3));
+		ugrid->InsertNextCell(tetra->GetCellType(), tetra->GetPointIds());
+	}
+
+	return ugrid;
+}
+
+
+vtkSmartPointer<vtkActor> MakeActor(vtkSmartPointer<vtkUnstructuredGrid> ugrid){
+
+	vtkNew<vtkDataSetMapper> mapper;
+	mapper->SetInputData(ugrid);
 
 	vtkNew<vtkActor> actor;
 	actor->SetMapper(mapper);

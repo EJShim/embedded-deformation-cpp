@@ -220,13 +220,12 @@ public:
 		double ylen = bounds[2] - bounds[3];
 		double zlen = bounds[4] - bounds[5];
 		double length = sqrt(xlen*xlen + ylen*ylen + zlen*zlen);
-		// m_ren->AddActor(m_actor);
+		m_ren->AddActor(m_actor);
 
 		m_hPoly = h_polydata;
 		m_hActor = MakeActor(h_polydata);
+		m_hActor->SetPosition(1, 0, 0);
 		m_ren->AddActor(m_hActor);
-
-		CalculateBiHarmonic(m_polydata, m_hPoly);
 
 		//Initialize Control Points
 		m_controlPoints = vtkSmartPointer<vtkPolyData>::New();		
@@ -260,10 +259,6 @@ public:
 
 protected:
 
-	void CalculateBiHarmonic(vtkSmartPointer<vtkPolyData> low, vtkSmartPointer<vtkPolyData> high){
-
-		
-	}
 
 	void Update(){		
 
@@ -403,7 +398,7 @@ int main(int argc, char *argv[]){
 	input_file_low = "../resources/octopus-low.mesh";
 	input_file_high = "../resources/octopus-high.mesh";
 	
-	Eigen::MatrixXd low_v, high_v;
+	Eigen::MatrixXd low_v, high_v, low_v_s, high_v_s;
 	Eigen::MatrixXi low_f, high_f;
 	Eigen::MatrixXi low_t, high_t;		
 	igl::readMESH(input_file_low, low_v, low_t, low_f);
@@ -416,37 +411,30 @@ int main(int argc, char *argv[]){
 	Eigen::VectorXi I,J;
 	igl::remove_unreferenced(low_v.rows(),low_f,I,J);
     std::for_each(low_f.data(),low_f.data()+low_f.size(),[&I](int & a){a=I(a);});
-    igl::slice(Eigen::MatrixXd(low_v),J,1,low_v);	
+    igl::slice(Eigen::MatrixXd(low_v),J,1,low_v_s);	
 	
 	
 	igl::readMESH(input_file_high, high_v, high_t, high_f);
 	igl::remove_unreferenced(high_v.rows(),high_f,I,J);
     std::for_each(high_f.data(),high_f.data()+high_f.size(),[&I](int & a){a=I(a);});
-    igl::slice(Eigen::MatrixXd(high_v),J,1,high_v);	
+    igl::slice(Eigen::MatrixXd(high_v),J,1,high_v_s);	
 
-	// Test TEtgen hihg
-	// Tetrahedralized interior
-	// Eigen::MatrixXd TV;
-	// Eigen::MatrixXi TT;
-	// Eigen::MatrixXi TF;
-	// igl::copyleft::tetgen::tetrahedralize(high_v, high_f, "pq1.414Y", TV,TT,TF);
-	// std::cout << TV.rows() << "," << TT.rows() << "," << TF.rows() << std::endl;
 
 	// Calculate W here, because it is too 귀찮음 
 	Eigen::VectorXi b;
     {
 
-        Eigen::VectorXi J = Eigen::VectorXi::LinSpaced(high_v.rows(),0,high_v.rows()-1);
+        Eigen::VectorXi J = Eigen::VectorXi::LinSpaced(high_v_s.rows(),0,high_v_s.rows()-1);
         Eigen::VectorXd sqrD;
         Eigen::MatrixXd _2;
-        igl::point_mesh_squared_distance(low_v,high_v,J,sqrD,b,_2);
+        igl::point_mesh_squared_distance(low_v_s,high_v_s,J,sqrD,b,_2);
     }
 	std::vector<std::vector<int> > S;
     igl::matrix_to_list(b,S);
-	cout<<"Computing weights for "<<b.size()<< " handles at "<<high_v.rows()<<" vertices..."<<endl;
+	cout<<"Computing weights for "<<b.size()<< " handles at "<<high_v_s.rows()<<" vertices..."<<endl;
 	const int k = 2;
 	Eigen::MatrixXd W;
-    igl::biharmonic_coordinates(high_v, high_f,S,k,W);
+    igl::biharmonic_coordinates(high_v_s, high_f,S,k,W);
 	std::cout << W.rows() << "," << W.cols() << std::endl;
 	
 
@@ -464,8 +452,8 @@ int main(int argc, char *argv[]){
 	ren->SetGradientBackground(true);
 
 	//Read Polydata
-	vtkSmartPointer<vtkPolyData> polydata = MakePolyData(low_v, low_f);
-	vtkSmartPointer<vtkPolyData> h_polydata = MakePolyData(high_v, high_f);
+	vtkSmartPointer<vtkPolyData> polydata = MakePolyData(low_v_s, low_f);
+	vtkSmartPointer<vtkPolyData> h_polydata = MakePolyData(high_v_s, high_f);
 
 	std::cout << polydata->GetNumberOfPoints() << std::endl;
 
