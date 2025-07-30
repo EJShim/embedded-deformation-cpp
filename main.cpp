@@ -411,6 +411,8 @@ int main(int argc, char *argv[]){
 	std::cout << low_v << std::endl;
 
 
+
+	// Reseerve Only referenced
 	Eigen::VectorXi I,J;
 	igl::remove_unreferenced(low_v.rows(),low_f,I,J);
     std::for_each(low_f.data(),low_f.data()+low_f.size(),[&I](int & a){a=I(a);});
@@ -429,6 +431,23 @@ int main(int argc, char *argv[]){
 	// Eigen::MatrixXi TF;
 	// igl::copyleft::tetgen::tetrahedralize(high_v, high_f, "pq1.414Y", TV,TT,TF);
 	// std::cout << TV.rows() << "," << TT.rows() << "," << TF.rows() << std::endl;
+
+	// Calculate W here, because it is too 귀찮음 
+	Eigen::VectorXi b;
+    {
+
+        Eigen::VectorXi J = Eigen::VectorXi::LinSpaced(high_v.rows(),0,high_v.rows()-1);
+        Eigen::VectorXd sqrD;
+        Eigen::MatrixXd _2;
+        igl::point_mesh_squared_distance(low_v,high_v,J,sqrD,b,_2);
+    }
+	std::vector<std::vector<int> > S;
+    igl::matrix_to_list(b,S);
+	cout<<"Computing weights for "<<b.size()<< " handles at "<<high_v.rows()<<" vertices..."<<endl;
+	const int k = 2;
+	Eigen::MatrixXd W;
+    igl::biharmonic_coordinates(high_v, high_f,S,k,W);
+	std::cout << W.rows() << "," << W.cols() << std::endl;
 	
 
 
@@ -454,24 +473,6 @@ int main(int argc, char *argv[]){
 	vtkNew<InteractorStyle> controller;
 	iren->SetInteractorStyle(controller);
 	controller->SetTargetPolyData(polydata, h_polydata);
-
-
-	// Calculate W here, because it is too 귀찮음 
-	Eigen::VectorXi b;
-    {
-
-        Eigen::VectorXi J = Eigen::VectorXi::LinSpaced(high_v.rows(),0,high_v.rows()-1);
-        Eigen::VectorXd sqrD;
-        Eigen::MatrixXd _2;
-        igl::point_mesh_squared_distance(low_v,high_v,J,sqrD,b,_2);
-    }
-	std::vector<std::vector<int> > S;
-    igl::matrix_to_list(b,S);
-	cout<<"Computing weights for "<<b.size()<< " handles at "<<high_v.rows()<<" vertices..."<<endl;
-	const int k = 2;
-	Eigen::MatrixXd W;
-    igl::biharmonic_coordinates(high_v, high_f,S,k,W);
-	std::cout << W.rows() << "," << W.cols() << std::endl;
 	controller->SetBiharmonicWeights(W.cast<float>());
 	
 	ren->ResetCamera();
