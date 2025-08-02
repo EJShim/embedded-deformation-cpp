@@ -20,7 +20,8 @@ def read_vtu(vtu_filename):
 
 def make_low_mesh(ugrid):
     """
-    Converts a vtkUnstructuredGrid to a simplified vtkPolyData with 400-500 vertices.
+    Converts a vtkUnstructuredGrid to a simplified vtkPolyData with 400-500 vertices
+    using Quadric Decimation for better vertex distribution.
     """
     if not ugrid or ugrid.GetNumberOfCells() == 0:
         print("Error: Input grid for make_low_mesh is invalid.")
@@ -53,14 +54,13 @@ def make_low_mesh(ugrid):
     else:
         reduction = 0.0
 
-    decimator = vtk.vtkDecimatePro()
+    decimator = vtk.vtkQuadricDecimation()
     decimator.SetInputData(polydata_to_decimate)
     decimator.SetTargetReduction(reduction)
-    decimator.PreserveTopologyOn()
     decimator.Update()
     
     low_polydata = decimator.GetOutput()
-    print(f"Decimated to {low_polydata.GetNumberOfPoints()} points and {low_polydata.GetNumberOfPolys()} polygons.")
+    print(f"Decimated with Quadric method to {low_polydata.GetNumberOfPoints()} points and {low_polydata.GetNumberOfPolys()} polygons.")
 
     return low_polydata
 
