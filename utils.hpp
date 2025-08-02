@@ -12,6 +12,7 @@
 #include <vtkUnstructuredGrid.h>
 #include <vtkTetra.h>
 #include <vtkDataSetMapper.h>
+#include <vtkOBJReader.h>
 #include <igl/readMESH.h>
 
 template <typename DerivedV, typename DerivedF>
@@ -48,17 +49,7 @@ vtkSmartPointer<vtkPolyData> ReadPolyData(std::string filename){
 	vtkSmartPointer<vtkPolyData> results;
 	
 	std::string ext = filename.substr(filename.find_last_of(".")+1);
-	if(ext == "off"){
-		//read igl off file read test
-		// Eigen::Matrix<double, -1, -1,  Eigen::RowMajor> V;
-		Eigen::MatrixXd V;
-		Eigen::MatrixXi F;	
-		Eigen::MatrixXi T;	
-		igl::read_triangle_mesh(filename, V,F);
-		
-		results = MakePolyData(V, F);
-
-	}else if(ext == "obj"){
+	if(ext == "obj"){
 		vtkNew<vtkOBJReader> reader;
 		reader->SetFileName(filename.c_str());
 		reader->Update();

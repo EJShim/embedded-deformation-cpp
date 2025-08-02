@@ -1,17 +1,21 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <vtkCellType.h>
 #include <vtkPolyData.h>
 #include <vtkSmartPointer.h>
+#include <vtkTriangle.h>
 #include <vtkUnstructuredGrid.h>
-#include "SimulatorInteractor.hpp"
-#include "utils.hpp"
+#include <vtkGeometryFilter.h>
+#include <vtkTriangleFilter.h>
+#include <vtkQuadricDecimation.h>
+#include <vtkXMLUnstructuredGridReader.h>
 
 #include <igl/point_mesh_squared_distance.h>
-// #include <igl/copyleft/tetgen/tetrahedralize.h>
 #include <igl/biharmonic_coordinates.h>
 #include <igl/remove_unreferenced.h>
-
+#include "utils.hpp"
+#include "SimulatorInteractor.hpp"
 
 
 Eigen::MatrixXd ComputeBiharmonic(vtkSmartPointer<vtkUnstructuredGrid> high, vtkSmartPointer<vtkPolyData> low){
@@ -46,26 +50,49 @@ Eigen::MatrixXd ComputeBiharmonic(vtkSmartPointer<vtkUnstructuredGrid> high, vtk
 }
 
 
+vtkSmartPointer<vtkPolyData> GenerateLowResolutionMesh(vtkSmartPointer<vtkUnstructuredGrid> highMesh){
+
+	vtkSmartPointer<vtkGeometryFilter> surfaceFilter = vtkSmartPointer<vtkGeometryFilter>::New();
+	surfaceFilter->SetInputData(highMesh);
+
+	vtkSmartPointer<vtkTriangleFilter> trianglelFilter = vtkSmartPointer<vtkTriangleFilter>::New();
+	trianglelFilter->SetInputConnection(surfaceFilter->GetOutputPort());
+	trianglelFilter->Update();
+
+	vtkSmartPointer<vtkPolyData> initialMesh  = trianglelFilter->GetOutput();
+	int initialPoints = initialMesh->GetNumberOfPoints();
+	int initialPolys = initialMesh->GetNumberOfPolys();
+
+	double reduction = (initialPolys - 900.0) / initialPolys;
+
+	vtkSmartPointer<vtkQuadricDecimation> decimator = vtkSmartPointer<vtkQuadricDecimation>::New();
+	decimator->SetInputData(initialMesh);
+	decimator->SetTargetReduction(reduction);
+	decimator->Update();
+
+	return decimator->GetOutput();
+}
+
 
 int main(int argc, char *argv[]){
 
-	std::string input_file_low;
+	// std::string input_file_low;
 	std::string input_file_high;
-	// if(argc == 1){		
-	input_file_low = "../resources/octopus-low.mesh";
+	// // if(argc == 1){		
+	// input_file_low = "../resources/octopus-low.mesh";
 	input_file_high = "../resources/octopus-high.mesh";
 	
 	Eigen::MatrixXd low_v, high_v, low_v_s, high_v_s;
 	Eigen::MatrixXi low_f, high_f;
 	Eigen::MatrixXi low_t, high_t;		
-	igl::readMESH(input_file_low, low_v, low_t, low_f);
-	std::cout << "Low-res mesh vertices: " << low_v.rows() << std::endl;
+	// igl::readMESH(input_file_low, low_v, low_t, low_f);
+	// std::cout << "Low-res mesh vertices: " << low_v.rows() << std::endl;
 
-	// Reseerve Only referenced
-		Eigen::VectorXi I,J;
-	igl::remove_unreferenced(low_v.rows(),low_f,I,J);
-    std::for_each(low_f.data(),low_f.data()+low_f.size(),[&I](int & a){a=I(a);});
-    igl::slice(Eigen::MatrixXd(low_v),J,1,low_v_s);	
+	// // Reseerve Only referenced
+	Eigen::VectorXi I,J;
+	// igl::remove_unreferenced(low_v.rows(),low_f,I,J);
+    // std::for_each(low_f.data(),low_f.data()+low_f.size(),[&I](int & a){a=I(a);});
+    // igl::slice(Eigen::MatrixXd(low_v),J,1,low_v_s);	
 	
 	
 	igl::readMESH(input_file_high, high_v, high_t, high_f);
@@ -73,13 +100,22 @@ int main(int argc, char *argv[]){
     std::for_each(high_t.data(),high_t.data()+high_t.size(),[&I](int & a){a=I(a);});
     igl::slice(Eigen::MatrixXd(high_v),J,1,high_v_s);	
 
+	// vtkSmartPointer<vtkPolyData> polydata = MakePolyData(low_v_s, low_f);
 
-	// Create VTK data structures
-	vtkSmartPointer<vtkPolyData> polydata = MakePolyData(low_v_s, low_f);
-	vtkSmartPointer<vtkUnstructuredGrid> h_ugrid = MakeUnstructuredGrid(high_v_s, high_t);
+
+	vtkSmartPointer<vtkUnstructuredGrid> high = MakeUnstructuredGrid(high_v_s, high_t);
+
+	//Fixme :: something worng
+	// vtkSmartPointer<vtkXMLUnstructuredGridReader> reader = vtkSmartPointer<vtkXMLUnstructuredGridReader>::New();
+	// reader->SetFileName(input_file_high.c_str());
+	// reader->Update();
+	// vtkSmartPointer<vtkUnstructuredGrid> high = reader->GetOutput();
+	vtkSmartPointer<vtkPolyData> low = GenerateLowResolutionMesh(high);
+
+
 
 	// Compute Biharmonic Weights
-	Eigen::MatrixXd W = ComputeBiharmonic(h_ugrid, polydata);
+	Eigen::MatrixXd W = ComputeBiharmonic(high, low);
     
 	// Initialize Renderer
     vtkNew<vtkRenderWindowInteractor> iren;
@@ -95,7 +131,7 @@ int main(int argc, char *argv[]){
 	// Add to system
 	vtkNew<CustomInteractorStyle> controller;
 	iren->SetInteractorStyle(controller);
-	controller->SetTargetPolyData(polydata, h_ugrid);
+	controller->SetTargetPolyData(low, high);
 	controller->SetBiharmonicWeights(W.cast<float>());
 	
 	ren->ResetCamera();
