@@ -120,3 +120,37 @@ vtkSmartPointer<vtkActor> MakeActor(vtkSmartPointer<vtkUnstructuredGrid> ugrid){
 
 	return actor;
 }
+
+
+// Function to extract vertices from a VTK data structure into an Eigen matrix
+void GetVertices(vtkSmartPointer<vtkPointSet> data, Eigen::MatrixXd& V)
+{
+    V.resize(data->GetNumberOfPoints(), 3);
+    for (vtkIdType i = 0; i < data->GetNumberOfPoints(); i++)
+    {
+        double p[3];
+        data->GetPoint(i, p);
+        V.row(i) << p[0], p[1], p[2];
+    }
+}
+
+// Function to extract tetrahedra from a vtkUnstructuredGrid into an Eigen matrix
+void GetTetras(vtkSmartPointer<vtkUnstructuredGrid> ugrid, Eigen::MatrixXi& T)
+{
+    T.resize(ugrid->GetNumberOfCells(), 4);
+    ugrid->GetCells()->InitTraversal();
+    vtkNew<vtkIdList> ids;
+    vtkIdType cellId = 0;
+    while(ugrid->GetCells()->GetNextCell(ids))
+    {
+        if(ids->GetNumberOfIds() == 4) // It's a tetra
+        {
+            for(vtkIdType i = 0; i < ids->GetNumberOfIds(); ++i)
+            {
+                T(cellId, i) = ids->GetId(i);
+            }
+            cellId++;
+        }
+    }
+    T.conservativeResize(cellId, 4);
+}
