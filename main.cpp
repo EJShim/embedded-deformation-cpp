@@ -83,14 +83,16 @@ vtkSmartPointer<vtkPolyData> GenerateLowResolutionMesh(vtkSmartPointer<vtkUnstru
 int main(int argc, char *argv[]){
 
 	// std::string input_file_low;
-	std::string input_file_high;
-	// // if(argc == 1){		
+	std::string input_filename;
+	if(argc == 1){		
+		input_filename = argv[1];
+	}
 	
-	input_file_high = "../resources/octopus.vtu";
+	input_filename = "../resources/octopus.vtu";
 
 	//Fixme :: something worng
 	vtkSmartPointer<vtkXMLUnstructuredGridReader> reader = vtkSmartPointer<vtkXMLUnstructuredGridReader>::New();
-	reader->SetFileName(input_file_high.c_str());
+	reader->SetFileName(input_filename.c_str());
 	reader->Update();
 	vtkSmartPointer<vtkUnstructuredGrid> high = reader->GetOutput();
 	
