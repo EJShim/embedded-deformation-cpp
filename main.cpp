@@ -10,6 +10,9 @@
 #include <vtkTriangleFilter.h>
 #include <vtkQuadricDecimation.h>
 #include <vtkXMLUnstructuredGridReader.h>
+#include <vtkCleanPolyData.h>
+#include <vtkCleanUnstructuredGrid.h>
+#include <vtkUnstructuredGridReader.h>
 
 #include <igl/point_mesh_squared_distance.h>
 #include <igl/biharmonic_coordinates.h>
@@ -68,9 +71,12 @@ vtkSmartPointer<vtkPolyData> GenerateLowResolutionMesh(vtkSmartPointer<vtkUnstru
 	vtkSmartPointer<vtkQuadricDecimation> decimator = vtkSmartPointer<vtkQuadricDecimation>::New();
 	decimator->SetInputData(initialMesh);
 	decimator->SetTargetReduction(reduction);
-	decimator->Update();
 
-	return decimator->GetOutput();
+	vtkSmartPointer<vtkCleanPolyData> cleaner = vtkSmartPointer<vtkCleanPolyData>::New();
+	cleaner->SetInputConnection(decimator->GetOutputPort());
+	cleaner->Update();
+
+	return cleaner->GetOutput();
 }
 
 
@@ -79,40 +85,17 @@ int main(int argc, char *argv[]){
 	// std::string input_file_low;
 	std::string input_file_high;
 	// // if(argc == 1){		
-	// input_file_low = "../resources/octopus-low.mesh";
-	input_file_high = "../resources/octopus-high.mesh";
 	
-	Eigen::MatrixXd low_v, high_v, low_v_s, high_v_s;
-	Eigen::MatrixXi low_f, high_f;
-	Eigen::MatrixXi low_t, high_t;		
-	// igl::readMESH(input_file_low, low_v, low_t, low_f);
-	// std::cout << "Low-res mesh vertices: " << low_v.rows() << std::endl;
-
-	// // Reseerve Only referenced
-	Eigen::VectorXi I,J;
-	// igl::remove_unreferenced(low_v.rows(),low_f,I,J);
-    // std::for_each(low_f.data(),low_f.data()+low_f.size(),[&I](int & a){a=I(a);});
-    // igl::slice(Eigen::MatrixXd(low_v),J,1,low_v_s);	
-	
-	
-	igl::readMESH(input_file_high, high_v, high_t, high_f);
-	igl::remove_unreferenced(high_v.rows(),high_t,I,J);
-    std::for_each(high_t.data(),high_t.data()+high_t.size(),[&I](int & a){a=I(a);});
-    igl::slice(Eigen::MatrixXd(high_v),J,1,high_v_s);	
-
-	// vtkSmartPointer<vtkPolyData> polydata = MakePolyData(low_v_s, low_f);
-
-
-	vtkSmartPointer<vtkUnstructuredGrid> high = MakeUnstructuredGrid(high_v_s, high_t);
+	input_file_high = "../resources/octopus.vtu";
 
 	//Fixme :: something worng
-	// vtkSmartPointer<vtkXMLUnstructuredGridReader> reader = vtkSmartPointer<vtkXMLUnstructuredGridReader>::New();
-	// reader->SetFileName(input_file_high.c_str());
-	// reader->Update();
-	// vtkSmartPointer<vtkUnstructuredGrid> high = reader->GetOutput();
+	vtkSmartPointer<vtkXMLUnstructuredGridReader> reader = vtkSmartPointer<vtkXMLUnstructuredGridReader>::New();
+	reader->SetFileName(input_file_high.c_str());
+	reader->Update();
+	vtkSmartPointer<vtkUnstructuredGrid> high = reader->GetOutput();
+	
+	// Triangulate and decimate, generate low triangle mesh
 	vtkSmartPointer<vtkPolyData> low = GenerateLowResolutionMesh(high);
-
-
 
 	// Compute Biharmonic Weights
 	Eigen::MatrixXd W = ComputeBiharmonic(high, low);
@@ -127,7 +110,6 @@ int main(int argc, char *argv[]){
     renWin->AddRenderer(ren);
 	ren->SetGradientBackground(true);
 	
-
 	// Add to system
 	vtkNew<CustomInteractorStyle> controller;
 	iren->SetInteractorStyle(controller);
